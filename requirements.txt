@@ -1,0 +1,6 @@
+pandas
+numpy
+flask
+matplotlib
+tqdm
+python-dotenv
