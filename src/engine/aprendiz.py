@@ -1,14 +1,16 @@
 import json
+import os
 from collections import Counter
 from src.db.memoria_sqlite import carregar_memoria_premiada
 
 ARQUIVO_PERFIL = "src/memory/perfil_vencedor.json"
 
+
 def gerar_perfil_vencedor():
     jogos = carregar_memoria_premiada()
 
     if not jogos:
-        print("⚠️ Nenhum jogo premiado para aprendizado")
+        print("⚠️ Nenhum jogo premiado (11+) para aprendizado")
         return
 
     contador = Counter()
@@ -23,12 +25,15 @@ def gerar_perfil_vencedor():
 
     perfil = {
         "frequencia_dezenas": dict(contador),
-        "media_pares": sum(pares) / len(pares),
-        "media_soma": sum(somas) / len(somas),
+        "media_pares": round(sum(pares) / len(pares), 2),
+        "media_soma": round(sum(somas) / len(somas), 2),
         "total_jogos": len(jogos)
     }
 
+    os.makedirs("src/memory", exist_ok=True)
+
     with open(ARQUIVO_PERFIL, "w", encoding="utf-8") as f:
-        json.dump(perfil, f, indent=4)
+        json.dump(perfil, f, indent=4, ensure_ascii=False)
 
     print("🧠 Perfil vencedor atualizado com sucesso")
+

@@ -6,6 +6,8 @@ from src.engine.memoria import (
 )
 from src.db.banco import carregar_concursos
 from src.engine.aprendiz import gerar_perfil_vencedor
+from src.db.memoria_sqlite import salvar_memoria
+
 
 def treinar_sequencial():
     print("🧠 Treinamento sequencial iniciado (BLOCO 6)")
@@ -35,6 +37,8 @@ def treinar_sequencial():
                 jogo=jogo,
                 pontos=pontos
             )
+            salvar_memoria(concurso_atual, jogo_gerado, pontos)
     gerar_perfil_vencedor()
 
     print("✅ Treinamento finalizado")
+
