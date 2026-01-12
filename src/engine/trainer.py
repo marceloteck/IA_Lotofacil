@@ -5,7 +5,7 @@ from src.engine.memoria import (
     salvar_jogo_premiado
 )
 from src.db.banco import carregar_concursos
-
+from src.engine.aprendiz import gerar_perfil_vencedor
 
 def treinar_sequencial():
     print("🧠 Treinamento sequencial iniciado (BLOCO 6)")
@@ -35,5 +35,6 @@ def treinar_sequencial():
                 jogo=jogo,
                 pontos=pontos
             )
+    gerar_perfil_vencedor()
 
     print("✅ Treinamento finalizado")

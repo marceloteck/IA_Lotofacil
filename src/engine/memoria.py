@@ -41,6 +41,8 @@ def salvar_jogo_premiado(concurso_previsto, jogo, pontos):
 
 
 def listar_melhores(min_pontos=11):
+    inicializar_memoria()  # 🔥 GARANTE QUE A TABELA EXISTE
+
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
 
