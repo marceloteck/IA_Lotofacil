@@ -1,0 +1,37 @@
+name: 🧠 Treinamento IA Lotofácil
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  treinamento:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: 🐍 Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: 🧠 Executar treinamento
+        run: |
+          python -m teste_treinamento
+
+      - name: 📤 Commit do relatório gerado (se houver mudanças)
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
+          git add .
+          git diff --cached --quiet || git commit -m "📊 Atualiza relatório automático"
+          git push
