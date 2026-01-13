@@ -1,7 +1,7 @@
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path("data/loto.db")
+DB_PATH = Path("data/lotofacil.db")
 
 def inicializar_memoria():
     conn = sqlite3.connect(DB_PATH)

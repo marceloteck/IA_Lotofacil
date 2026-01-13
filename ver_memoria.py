@@ -1,15 +1,11 @@
 from src.db.memoria_sqlite import carregar_memoria_premiada
 
-premios = carregar_memoria_premiada(min_pontos=11)
-
 print("\n🏆 JOGOS PREMIADOS (11+ pontos)\n")
 
-if not premios:
+jogos = carregar_memoria_premiada()
+
+if not jogos:
     print("Nenhum jogo premiado encontrado.")
 else:
-    for p in premios:
-        concurso = p["concurso"]
-        pontos = p["pontos"]
-        jogo = p["dezenas"]
-
-        print(f"Concurso {concurso} | {pontos} pontos | {jogo}")
+    for j in jogos:
+        print(f"{j['pontos']} pontos | {j['dezenas']}")

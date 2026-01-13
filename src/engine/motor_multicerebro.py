@@ -8,27 +8,27 @@ UNIVERSO = list(range(1, 26))
 
 def gerar_jogo():
     perfil = obter_perfil_vencedor()
-    freq = carregar_frequencia_dezenas()
+    freq_dict = carregar_frequencia_dezenas()
 
     jogo = set()
 
-    # Perfil vencedor
+    # 1️⃣ Perfil vencedor (até 6 dezenas)
     if perfil:
         jogo.update(random.sample(perfil, min(6, len(perfil))))
 
-    # Frequência premiada
-    if freq:
-        ordenadas = sorted(freq.items(), key=lambda x: x[1], reverse=True)
-        top = [n for n, _ in ordenadas[:15]]
+    # 2️⃣ Frequência histórica
+    if freq_dict:
+        ordenadas = sorted(freq_dict.items(), key=lambda x: x[1], reverse=True)
+        frequentes = [int(n) for n, _ in ordenadas]
 
-        faltam = TOTAL_DEZENAS - len(jogo)
-        if faltam > 0:
-            jogo.update(random.sample(top, min(faltam, len(top))))
+        restantes = TOTAL_DEZENAS - len(jogo)
+        if restantes > 0:
+            jogo.update(random.sample(frequentes, min(restantes, len(frequentes))))
 
-    # Diversidade
-    faltam = TOTAL_DEZENAS - len(jogo)
-    if faltam > 0:
+    # 3️⃣ Aleatório controlado
+    restantes = TOTAL_DEZENAS - len(jogo)
+    if restantes > 0:
         pool = list(set(UNIVERSO) - jogo)
-        jogo.update(random.sample(pool, faltam))
+        jogo.update(random.sample(pool, restantes))
 
     return sorted(jogo)

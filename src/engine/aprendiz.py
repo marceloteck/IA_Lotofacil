@@ -23,8 +23,12 @@ def gerar_perfil_vencedor():
         pares.append(sum(1 for d in dezenas if d % 2 == 0))
         somas.append(sum(dezenas))
 
+    # 🔥 TOP dezenas mais recorrentes
+    top_dezenas = [int(d) for d, _ in contador.most_common(15)]
+
     perfil = {
-        "top_dezenas": [n for n, _ in contador.most_common(15)],
+        "top_dezenas": top_dezenas,
+        "frequencia_dezenas": dict(contador),
         "media_pares": round(sum(pares) / len(pares), 2),
         "media_soma": round(sum(somas) / len(somas), 2),
         "total_jogos": len(jogos)
@@ -35,10 +39,13 @@ def gerar_perfil_vencedor():
     with open(ARQUIVO_PERFIL, "w", encoding="utf-8") as f:
         json.dump(perfil, f, indent=4, ensure_ascii=False)
 
-    print("🧠 Perfil vencedor atualizado com sucesso")
+    print(f"🧠 Perfil vencedor aprendido com {len(jogos)} jogos")
 
 
 def obter_perfil_vencedor():
+    """
+    Retorna APENAS uma lista de dezenas (contrato fixo)
+    """
     if not os.path.exists(ARQUIVO_PERFIL):
         return []
 
