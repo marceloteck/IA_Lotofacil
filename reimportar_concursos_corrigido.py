@@ -1,4 +1,5 @@
 import csv
+import os
 from src.database.connection import get_conn
 
 #CSV_PATH = "data\planilhas\Lotofácil.csv"  # ajuste se necessário
