@@ -1,7 +1,10 @@
 import csv
 from src.database.connection import get_conn
 
-CSV_PATH = "data\planilhas\Lotofácil.csv"  # ajuste se necessário
+#CSV_PATH = "data\planilhas\Lotofácil.csv"  # ajuste se necessário
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CSV_PATH = os.path.join(BASE_DIR, "data", "planilhas", "Lotofácil.csv")
 
 
 def recriar_tabela():
