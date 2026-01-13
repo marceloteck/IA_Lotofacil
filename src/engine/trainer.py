@@ -15,11 +15,14 @@ def treinar_sequencial():
     print("🧠 Treinamento sequencial iniciado")
 
     resultados = carregar_resultados()
+    # 🔥 GARANTIR ORDEM CRONOLÓGICA (antigo → novo)
+    resultados = sorted(resultados, key=lambda x: x["concurso"])
+    
     avaliador = Avaliador()
-
+    
     for i in range(len(resultados) - 1):
         concurso_atual = resultados[i]["concurso"]
-        dezenas_reais = resultados[i + 1]["dezenas"]
+        dezenas_reais = resultados[i + 1]["dezenas"]     
 
         jogo = gerar_jogo()
         pontos = contar_acertos(jogo, dezenas_reais)
