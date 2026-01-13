@@ -6,6 +6,10 @@ from src.db.memoria_sqlite import salvar_jogo_premiado
 from src.utils.comparador import contar_acertos
 from src.utils.dados import carregar_resultados
 
+from src.engine.gerador_final import gerar_jogos_finais
+from src.reports.relatorio_txt import salvar_relatorio
+
+
 
 def treinar_sequencial():
     print("🧠 Treinamento sequencial iniciado")
@@ -32,5 +36,11 @@ def treinar_sequencial():
 
     gerar_perfil_vencedor()
     avaliador.relatorio()
+
+    jogos_15, jogos_18 = gerar_jogos_finais()
+    estatisticas = avaliador.resumo()
+
+    salvar_relatorio(jogos_15, jogos_18, estatisticas)
+
 
     print("✅ Treinamento finalizado")

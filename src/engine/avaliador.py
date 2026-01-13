@@ -29,3 +29,12 @@ class Avaliador:
 
         for pontos in sorted(self.distribuicao):
             print(f"  {pontos} pontos → {self.distribuicao[pontos]} jogos")
+
+    def resumo(self):
+        return {
+            "Jogos avaliados": self.total,
+            "Média de pontos": round(self.soma_pontos / self.total, 2) if self.total else 0,
+            "Jogos 11+": self.premiados,
+            "Taxa premiada (%)": round((self.premiados / self.total) * 100, 2) if self.total else 0
+        }
+
