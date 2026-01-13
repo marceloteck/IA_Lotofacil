@@ -9,10 +9,17 @@ on:
 jobs:
   treinamento:
     runs-on: ubuntu-latest
+    
+    # Adicionamos permissões explicitas para o GITHUB_TOKEN conseguir escrever no repositório
+    permissions:
+      contents: write
 
     steps:
       - name: 📥 Checkout do repositório
         uses: actions/checkout@v4
+        with:
+          # Garante que o histórico seja baixado corretamente para o push
+          fetch-depth: 0
 
       - name: 🐍 Configurar Python
         uses: actions/setup-python@v5
@@ -28,10 +35,18 @@ jobs:
         run: |
           python -m teste_treinamento
 
-      - name: 📤 Commit do relatório gerado (se houver mudanças)
+      - name: 📤 Commit e Push do relatório
         run: |
-          git config --global user.name "github-actions"
-          git config --global user.email "actions@github.com"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Adiciona apenas arquivos novos ou modificados (como seu relatório)
           git add .
-          git diff --cached --quiet || git commit -m "📊 Atualiza relatório automático"
-          git push
+          
+          # Só faz o commit se houver mudanças reais para evitar erro de "nothing to commit"
+          if ! git diff --cached --quiet; then
+            git commit -m "📊 Relatório automático: $(date +'%Y-%m-%d %H:%M:%S')"
+            git push
+          else
+            echo "Nenhuma mudança detectada no relatório."
+          fi
