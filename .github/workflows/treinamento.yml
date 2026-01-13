@@ -33,8 +33,8 @@ jobs:
 
       - name: 🧠 Executar treinamento
         run: |
-          python -m teste_treinamento
           python -m reimportar_concursos_corrigido
+          python -m teste_treinamento
 
       - name: 📤 Commit e Push do relatório
         run: |
