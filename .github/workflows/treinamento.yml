@@ -56,6 +56,7 @@ jobs:
 
           git add src/reports/relatorios/*.txt || true
           git add src/memory/perfil_vencedor.json || true
+          git add data/lotofacil.db || true
 
           if ! git diff --cached --quiet; then
             git commit -m "📊 Relatório automático: $(date +'%Y-%m-%d %H:%M:%S')"
