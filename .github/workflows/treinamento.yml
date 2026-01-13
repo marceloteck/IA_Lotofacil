@@ -9,8 +9,7 @@ on:
 jobs:
   treinamento:
     runs-on: ubuntu-latest
-    
-    # Adicionamos permissões explicitas para o GITHUB_TOKEN conseguir escrever no repositório
+
     permissions:
       contents: write
 
@@ -18,7 +17,6 @@ jobs:
       - name: 📥 Checkout do repositório
         uses: actions/checkout@v4
         with:
-          # Garante que o histórico seja baixado corretamente para o push
           fetch-depth: 0
 
       - name: 🐍 Configurar Python
@@ -31,20 +29,34 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: 🧠 Executar treinamento
+      # 🔎 Etapa de segurança: garante que o CSV existe
+      - name: 🔎 Verificar CSV de concursos
+        run: |
+          if [ ! -f data/planilhas/Lotofácil.csv ]; then
+            echo "❌ ERRO: data/planilhas/Lotofácil.csv não encontrado!"
+            exit 1
+          else
+            echo "✅ CSV encontrado"
+          fi
+
+      # 🗄️ IMPORTANTE: importar concursos ANTES do treino
+      - name: 🗄️ Importar concursos e criar tabelas
         run: |
           python -m reimportar_concursos_corrigido
+
+      - name: 🧠 Executar treinamento
+        run: |
           python -m teste_treinamento
 
+      # 📤 Commit SOMENTE do que importa
       - name: 📤 Commit e Push do relatório
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Adiciona apenas arquivos novos ou modificados (como seu relatório)
-          git add .
-          
-          # Só faz o commit se houver mudanças reais para evitar erro de "nothing to commit"
+
+          # Adiciona apenas relatórios (evita loop infinito)
+          git add src/reports/relatorios/*.txt || true
+
           if ! git diff --cached --quiet; then
             git commit -m "📊 Relatório automático: $(date +'%Y-%m-%d %H:%M:%S')"
             git push
