@@ -6,7 +6,7 @@ def salvar_relatorio(jogos_15, jogos_18, estatisticas):
     os.makedirs("src/reports", exist_ok=True)
 
     data = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    caminho = f"src/reports/relatorio_{data}.txt"
+    caminho = f"src/reports/relatorios/relatorio_{data}.txt"
 
     with open(caminho, "w", encoding="utf-8") as f:
         f.write("📊 RELATÓRIO FINAL — IA LOTOFÁCIL\n")

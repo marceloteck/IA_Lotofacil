@@ -2,7 +2,7 @@ import subprocess
 import time
 
 # Configurações
-tempo_limite_minutos = 30
+tempo_limite_minutos = 240
 segundos_totais = tempo_limite_minutos * 60
 inicio_geral = time.time()
 
