@@ -17,9 +17,9 @@ def treinar_sequencial():
     resultados = carregar_resultados()
     avaliador = Avaliador()
 
-    for i in range(len(resultados) - 1, 0, -1):
+    for i in range(len(resultados) - 1):
         concurso_atual = resultados[i]["concurso"]
-        dezenas_reais = resultados[i - 1]["dezenas"]
+        dezenas_reais = resultados[i + 1]["dezenas"]
 
         jogo = gerar_jogo()
         pontos = contar_acertos(jogo, dezenas_reais)
@@ -27,7 +27,7 @@ def treinar_sequencial():
         avaliador.registrar(pontos)
 
         print(
-            f"📘 Concurso {concurso_atual} → tentando prever {concurso_atual - 1} | Pontos: {pontos}"
+            f"📘 Concurso {concurso_atual} → tentando prever {concurso_atual + 1} | Pontos: {pontos}"
         )
 
         if pontos >= 11:
