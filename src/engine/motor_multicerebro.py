@@ -1,32 +1,34 @@
 import random
-from src.database.connection import get_conn
+from src.db.memoria_sqlite import carregar_frequencia_dezenas
+from src.engine.aprendiz import obter_perfil_vencedor
+
+TOTAL_DEZENAS = 15
+UNIVERSO = list(range(1, 26))
 
 
-def gerar_jogo(qtd=15):
-    """
-    Gera um jogo simples baseado em peso de frequência.
-    Versão mínima funcional para o treinamento sequencial.
-    """
+def gerar_jogo():
+    perfil = obter_perfil_vencedor()
+    freq = carregar_frequencia_dezenas()
 
-    conn = get_conn()
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT numero, peso
-        FROM frequencias
-        ORDER BY peso DESC
-    """)
-
-    dados = cur.fetchall()
-    conn.close()
-
-    numeros = [n for n, _ in dados]
-    pesos = [p for _, p in dados]
-
-    # escolha ponderada
     jogo = set()
-    while len(jogo) < qtd:
-        escolhido = random.choices(numeros, weights=pesos, k=1)[0]
-        jogo.add(escolhido)
+
+    # Perfil vencedor
+    if perfil:
+        jogo.update(random.sample(perfil, min(6, len(perfil))))
+
+    # Frequência premiada
+    if freq:
+        ordenadas = sorted(freq.items(), key=lambda x: x[1], reverse=True)
+        top = [n for n, _ in ordenadas[:15]]
+
+        faltam = TOTAL_DEZENAS - len(jogo)
+        if faltam > 0:
+            jogo.update(random.sample(top, min(faltam, len(top))))
+
+    # Diversidade
+    faltam = TOTAL_DEZENAS - len(jogo)
+    if faltam > 0:
+        pool = list(set(UNIVERSO) - jogo)
+        jogo.update(random.sample(pool, faltam))
 
     return sorted(jogo)

@@ -28,7 +28,7 @@ def garantir_tabela_memoria():
 
 def salvar_memoria(concurso, dezenas, pontos):
     if pontos < 11:
-        return  # regra da Lotofácil
+        return
 
     garantir_tabela_memoria()
 
@@ -60,11 +60,31 @@ def carregar_memoria_premiada():
 
     dados = []
     for dezenas, pontos in cur.fetchall():
-        jogo = list(map(int, dezenas.split(",")))
         dados.append({
-            "dezenas": jogo,
+            "dezenas": list(map(int, dezenas.split(","))),
             "pontos": pontos
         })
 
     con.close()
     return dados
+
+
+def carregar_frequencia_dezenas():
+    garantir_tabela_memoria()
+
+    con = conectar()
+    cur = con.cursor()
+
+    cur.execute("""
+        SELECT dezenas
+        FROM memoria_premiada
+        WHERE pontos >= 11
+    """)
+
+    freq = {}
+    for (dezenas,) in cur.fetchall():
+        for n in map(int, dezenas.split(",")):
+            freq[n] = freq.get(n, 0) + 1
+
+    con.close()
+    return freq

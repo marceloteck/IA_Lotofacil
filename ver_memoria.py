@@ -1,7 +1,15 @@
-from src.engine.memoria import listar_melhores
+from src.db.memoria_sqlite import carregar_memoria_premiada
 
-premios = listar_melhores()
+premios = carregar_memoria_premiada(min_pontos=11)
 
 print("\n🏆 JOGOS PREMIADOS (11+ pontos)\n")
-for concurso, pontos, jogo in premios:
-    print(f"Concurso {concurso} | {pontos} pontos | {jogo}")
+
+if not premios:
+    print("Nenhum jogo premiado encontrado.")
+else:
+    for p in premios:
+        concurso = p["concurso"]
+        pontos = p["pontos"]
+        jogo = p["dezenas"]
+
+        print(f"Concurso {concurso} | {pontos} pontos | {jogo}")

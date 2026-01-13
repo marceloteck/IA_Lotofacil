@@ -24,7 +24,7 @@ def gerar_perfil_vencedor():
         somas.append(sum(dezenas))
 
     perfil = {
-        "frequencia_dezenas": dict(contador),
+        "top_dezenas": [n for n, _ in contador.most_common(15)],
         "media_pares": round(sum(pares) / len(pares), 2),
         "media_soma": round(sum(somas) / len(somas), 2),
         "total_jogos": len(jogos)
@@ -37,3 +37,12 @@ def gerar_perfil_vencedor():
 
     print("🧠 Perfil vencedor atualizado com sucesso")
 
+
+def obter_perfil_vencedor():
+    if not os.path.exists(ARQUIVO_PERFIL):
+        return []
+
+    with open(ARQUIVO_PERFIL, "r", encoding="utf-8") as f:
+        perfil = json.load(f)
+
+    return perfil.get("top_dezenas", [])
