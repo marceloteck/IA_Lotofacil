@@ -3,10 +3,19 @@ from datetime import datetime
 
 
 def salvar_relatorio(jogos_15, jogos_18, estatisticas):
-    os.makedirs("src/reports", exist_ok=True)
+    # 📁 Diretório base do projeto
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+    # 📁 src/reports/relatorios
+    DIR_RELATORIOS = os.path.join(BASE_DIR, "relatorios")
+    os.makedirs(DIR_RELATORIOS, exist_ok=True)
+
+    # 🗓️ Nome do arquivo
     data = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    caminho = f"src/reports/relatorios/relatorio_{data}.txt"
+    caminho = os.path.join(
+        DIR_RELATORIOS,
+        f"relatorio_{data}.txt"
+    )
 
     with open(caminho, "w", encoding="utf-8") as f:
         f.write("📊 RELATÓRIO FINAL — IA LOTOFÁCIL\n")
