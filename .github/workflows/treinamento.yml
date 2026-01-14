@@ -38,33 +38,6 @@ jobs:
           fi
           echo "✅ CSV encontrado"
 
-      # 🧹 LIMPEZA TOTAL DE ESTADO ANTIGO
-      - name: 🧹 Limpar banco e memória antiga
-        run: |
-          rm -f data/lotofacil.db
-          rm -f src/memory/perfil_vencedor.json
-
-      # 🗄️ Criar banco + importar concursos
-      - name: 🗄️ Criar banco e importar concursos
-        run: |
-          python -m reimportar_concursos_corrigido
-
-      - name: 📤 Commit e Push do relatório
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-          git add src/reports/relatorios/*.txt || true
-          git add src/memory/perfil_vencedor.json || true
-          git add data/lotofacil.db || true
-
-          if ! git diff --cached --quiet; then
-            git commit -m "📊 Relatório automático: $(date +'%Y-%m-%d %H:%M:%S')"
-            git push
-          else
-            echo "Nenhuma mudança detectada."
-          fi
-
       # 🧠 Executar treinamento
       - name: 🧠 Executar treinamento
         run: |
