@@ -5,10 +5,19 @@ import statistics
 from collections import Counter
 
 from src.engine.motor_multicerebro import gerar_jogo
-from src.engine.avaliador import contar_acertos
+from src.engine.avaliador import Avaliador
 from src.db.memoria_sqlite import carregar_jogos_memoria
 
-# NN consultiva (opcional)
+# ===============================
+# 🔢 CONTADOR DE ACERTOS (LOCAL)
+# ===============================
+def contar_acertos(jogo, concurso):
+    return len(set(jogo) & set(concurso))
+
+
+# ===============================
+# 🧠 NN CONSULTIVA (OPCIONAL)
+# ===============================
 try:
     from src.engine.cerebro_neural import avaliar_ciclo
     NN_ATIVA = True
@@ -40,21 +49,24 @@ LIMITE_OVERFITTING = 0.70
 
 
 # ===============================
-# 🔁 EXECUTA CICLO
+# 🔁 EXECUTAR CICLO
 # ===============================
 def executar_ciclo(concursos):
     pontos = []
     dezenas_usadas = Counter()
+    avaliador = Avaliador()
 
     for concurso_real in concursos:
         jogo = gerar_jogo()
         p = contar_acertos(jogo, concurso_real)
+
         pontos.append(p)
+        avaliador.registrar(p)
 
         if p >= 11:
             dezenas_usadas.update(jogo)
 
-    return pontos, dezenas_usadas
+    return pontos, dezenas_usadas, avaliador
 
 
 # ===============================
@@ -94,37 +106,72 @@ def executar_laboratorio():
     ranking = []
     relatorio_txt = []
 
+    print(f"📦 Concursos usados no laboratório: {len(concursos)}\n")
+
     for estrategia in ESTRATEGIAS:
+        print(f"\n🔬 Testando estratégia: {estrategia['nome']}")
+        print("-" * 40)
+
         medias = []
         taxas = []
 
-        for _ in range(CICLOS):
-            pontos, dezenas = executar_ciclo(concursos)
-            m = coletar_metricas(pontos)
+        ciclos_validos = 0
+        ciclos_descartados = 0
 
-            # Avaliação NN (consultiva)
+        for ciclo in range(1, CICLOS + 1):
+            pontos, dezenas, _ = executar_ciclo(concursos)
+            metricas = coletar_metricas(pontos)
+
+            # 🧠 Avaliação NN
             if estrategia["usar_nn"] and NN_ATIVA:
                 score_nn = avaliar_ciclo(pontos)
                 if score_nn < 0.5:
-                    continue  # descarta ciclo fraco
+                    ciclos_descartados += 1
+                    print(f"  ⚠️ Ciclo {ciclo}/{CICLOS} descartado (NN fraca)")
+                    continue
 
-            medias.append(m["media"])
-            taxas.append(m["taxa_11"])
+            # 🚨 Overfitting
+            if detectar_overfitting(metricas, dezenas):
+                ciclos_descartados += 1
+                print(f"  🚨 Ciclo {ciclo}/{CICLOS} descartado (overfitting)")
+                continue
+
+            medias.append(metricas["media"])
+            taxas.append(metricas["taxa_11"])
+            ciclos_validos += 1
+
+            print(
+                f"  ✅ Ciclo {ciclo}/{CICLOS} | "
+                f"Média: {metricas['media']:.2f} | "
+                f"11+: {metricas['taxa_11']*100:.1f}%"
+            )
+
+        if not medias:
+            print("  ❌ Nenhum ciclo válido para esta estratégia.")
+            continue
 
         media_final = statistics.mean(medias)
         taxa_final = statistics.mean(taxas)
 
         ranking.append({
             "estrategia": estrategia["nome"],
-            "media": media_final,
-            "taxa_11": taxa_final
+            "media": round(media_final, 2),
+            "taxa_11": round(taxa_final, 4)
         })
+
+        print("\n📊 Resultado da estratégia:")
+        print(f"  ✔️ Ciclos válidos   : {ciclos_validos}")
+        print(f"  ❌ Ciclos descartados: {ciclos_descartados}")
+        print(f"  ⭐ Média final      : {media_final:.2f}")
+        print(f"  🎯 Taxa 11+         : {taxa_final*100:.2f}%")
 
         relatorio_txt.append(
             f"Estratégia: {estrategia['nome']}\n"
-            f"  Média pontos: {media_final:.2f}\n"
-            f"  Taxa 11+: {taxa_final*100:.2f}%\n"
-            "-" * 40
+            f"  Média de pontos : {media_final:.2f}\n"
+            f"  Taxa 11+        : {taxa_final*100:.2f}%\n"
+            f"  Ciclos válidos  : {ciclos_validos}\n"
+            f"  Descartados     : {ciclos_descartados}\n"
+            + "-" * 40
         )
 
     salvar_relatorio_txt(relatorio_txt)
