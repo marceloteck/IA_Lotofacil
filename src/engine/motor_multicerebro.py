@@ -12,16 +12,18 @@ from src.engine.fechamento_automatico import gerar_fechamento
 # ==================================
 
 # Modo automático: escolhe aleatoriamente a quantidade de dezenas
-MODO_TOTAL_DEZENAS_AUTOMATICO = True
+MODO_TOTAL_DEZENAS_AUTOMATICO = True # ATIVAR MODO AUTOMATICO
+#MODO_TOTAL_DEZENAS_AUTOMATICO = False # DESATIVAR MOVO AUTOMATICO
 
 # Se automático estiver desligado, usa este valor fixo
 TOTAL_DEZENAS_FIXO = 18
 
+# TOTAL DE DEZENAS ATUAL (dinâmico)
+TOTAL_DEZENAS = TOTAL_DEZENAS_FIXO
+
 # Intervalo permitido quando automático
 INTERVALO_DEZENAS = [15, 16, 17, 18, 19, 20]
 
-
-#TOTAL_DEZENAS = 18
 UNIVERSO = list(range(1, 26))
 
 MAX_PERFIL = 6
@@ -40,9 +42,10 @@ def resolver_total_dezenas():
 
 
 
-
-
 def gerar_jogo():
+    global TOTAL_DEZENAS
+    TOTAL_DEZENAS = resolver_total_dezenas()
+
     perfil = obter_perfil_vencedor() or []
     freq_dict = carregar_frequencia_dezenas() or {}
     nucleo_data = extrair_nucleo_global()
@@ -94,6 +97,8 @@ def gerar_jogo():
         jogo.update(random.sample(pool, restantes))
 
     return sorted(jogo)
+
+
 
 
 # ==================================
