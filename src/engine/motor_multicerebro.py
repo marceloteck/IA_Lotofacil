@@ -2,7 +2,7 @@ import random
 from src.db.memoria_sqlite import carregar_frequencia_dezenas
 from src.engine.aprendiz import obter_perfil_vencedor
 
-TOTAL_DEZENAS = 15
+TOTAL_DEZENAS = 18
 UNIVERSO = list(range(1, 26))
 
 
