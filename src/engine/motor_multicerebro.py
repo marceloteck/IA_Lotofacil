@@ -5,12 +5,41 @@ from src.engine.extrator_nucleo import extrair_nucleo_global, gerar_base_18_nucl
 from src.engine.cerebro_neural import avaliar_base
 from src.engine.fechamento_automatico import gerar_fechamento
 
-TOTAL_DEZENAS = 18
+
+
+# ==================================
+# 🎛️ CONFIGURAÇÃO DE TREINAMENTO
+# ==================================
+
+# Modo automático: escolhe aleatoriamente a quantidade de dezenas
+MODO_TOTAL_DEZENAS_AUTOMATICO = True
+
+# Se automático estiver desligado, usa este valor fixo
+TOTAL_DEZENAS_FIXO = 18
+
+# Intervalo permitido quando automático
+INTERVALO_DEZENAS = [15, 16, 17, 18, 19, 20]
+
+
+#TOTAL_DEZENAS = 18
 UNIVERSO = list(range(1, 26))
 
 MAX_PERFIL = 6
 MIN_NUCLEO = 4
 MAX_FREQ_DOMINANCIA = 10
+
+
+def resolver_total_dezenas():
+    """
+    Decide quantas dezenas o motor vai usar neste ciclo.
+    Não afeta fechamento nem geração final.
+    """
+    if MODO_TOTAL_DEZENAS_AUTOMATICO:
+        return random.choice(INTERVALO_DEZENAS)
+    return TOTAL_DEZENAS_FIXO
+
+
+
 
 
 def gerar_jogo():

@@ -21,4 +21,4 @@ while (time.time() - inicio_geral) < segundos_totais:
     else:
         print("Tempo esgotado!")
 
-print("Período de 30 minutos concluído.")
+print("Período de ".tempo_limite_minutos." minutos concluído.")
