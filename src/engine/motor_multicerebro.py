@@ -1,73 +1,93 @@
 import random
-from collections import Counter
 from src.db.memoria_sqlite import carregar_frequencia_dezenas
 from src.engine.aprendiz import obter_perfil_vencedor
+from src.engine.extrator_nucleo import extrair_nucleo_global, gerar_base_18_nucleo
+from src.engine.cerebro_neural import avaliar_base
+from src.engine.fechamento_automatico import gerar_fechamento
 
 TOTAL_DEZENAS = 18
 UNIVERSO = list(range(1, 26))
 
-# ===============================
-# PARÂMETROS DE INTELIGÊNCIA
-# ===============================
-MAX_PERFIL = 6          # máximo do perfil vencedor
-MIN_NUCLEO = 4          # núcleo mínimo garantido
-MAX_FREQ_DOMINANCIA = 10  # evita vício em poucas dezenas
+MAX_PERFIL = 6
+MIN_NUCLEO = 4
+MAX_FREQ_DOMINANCIA = 10
 
 
 def gerar_jogo():
     perfil = obter_perfil_vencedor() or []
     freq_dict = carregar_frequencia_dezenas() or {}
+    nucleo_data = extrair_nucleo_global()
+
+    nucleo = nucleo_data.get("nucleo", [])
+    satelites = nucleo_data.get("satelites", [])
 
     jogo = set()
 
     # ===============================
-    # 1️⃣ PERFIL VENCEDOR (núcleo)
+    # 1️⃣ NÚCLEO GLOBAL
     # ===============================
-    if perfil:
-        escolhidas = random.sample(perfil, min(MAX_PERFIL, len(perfil)))
-        jogo.update(escolhidas)
+    if nucleo:
+        jogo.update(random.sample(nucleo, min(4, len(nucleo))))
 
     # ===============================
-    # 2️⃣ FREQUÊNCIA COM PESO
+    # 2️⃣ PERFIL VENCEDOR
+    # ===============================
+    perfil_filtrado = list(set(perfil) - jogo)
+    if perfil_filtrado:
+        jogo.update(random.sample(perfil_filtrado, min(MAX_PERFIL, len(perfil_filtrado))))
+
+    # ===============================
+    # 3️⃣ SATÉLITES
+    # ===============================
+    restantes = TOTAL_DEZENAS - len(jogo)
+    if restantes > 0 and satelites:
+        pool = list(set(satelites) - jogo)
+        jogo.update(random.sample(pool, min(restantes, len(pool))))
+
+    # ===============================
+    # 4️⃣ FREQUÊNCIA HISTÓRICA
     # ===============================
     if freq_dict:
-        # ordena por frequência
         ordenadas = sorted(freq_dict.items(), key=lambda x: x[1], reverse=True)
-
-        # limita dominância
-        top_freq = ordenadas[:MAX_FREQ_DOMINANCIA]
-
-        pool_frequente = []
-        for dezena, peso in top_freq:
-            pool_frequente.extend([int(dezena)] * peso)
+        top_freq = [int(d) for d, _ in ordenadas[:MAX_FREQ_DOMINANCIA]]
 
         restantes = TOTAL_DEZENAS - len(jogo)
-        if restantes > 0 and pool_frequente:
-            amostra = set(random.sample(pool_frequente, min(restantes, len(pool_frequente))))
-            jogo.update(amostra)
+        pool = list(set(top_freq) - jogo)
+        if restantes > 0 and pool:
+            jogo.update(random.sample(pool, min(restantes, len(pool))))
 
     # ===============================
-    # 3️⃣ GARANTIA DE NÚCLEO
-    # ===============================
-    if len(jogo) < MIN_NUCLEO and perfil:
-        faltantes = MIN_NUCLEO - len(jogo)
-        extras = list(set(perfil) - jogo)
-        if extras:
-            jogo.update(random.sample(extras, min(faltantes, len(extras))))
-
-    # ===============================
-    # 4️⃣ ALEATORIEDADE INTELIGENTE
+    # 5️⃣ ALEATORIEDADE FINAL
     # ===============================
     restantes = TOTAL_DEZENAS - len(jogo)
     if restantes > 0:
         pool = list(set(UNIVERSO) - jogo)
         jogo.update(random.sample(pool, restantes))
 
-    # ===============================
-    # 5️⃣ VALIDAÇÃO FINAL
-    # ===============================
-    if len(jogo) != TOTAL_DEZENAS:
-        pool = list(set(UNIVERSO) - jogo)
-        jogo.update(random.sample(pool, TOTAL_DEZENAS - len(jogo)))
-
     return sorted(jogo)
+
+
+# ==================================
+# 🎛️ PARÂMETROS
+# ==================================
+TAMANHO_JOGO_FINAL = 15
+
+
+def gerar_jogo_inteligente():
+    # 1️⃣ GERAR BASE 18
+    base = gerar_base_18_nucleo()
+
+    # 2️⃣ CONSULTAR CÉREBRO NEURAL (consultivo)
+    avaliacao = avaliar_base(base)
+
+    if not avaliacao.get("aprovado", True):
+        base = gerar_base_18_nucleo()
+
+    # 3️⃣ GERAR FECHAMENTO
+    jogos = gerar_fechamento(base, TAMANHO_JOGO_FINAL)
+
+    return {
+        "base_18": base,
+        "avaliacao": avaliacao,
+        "jogos": jogos
+    }

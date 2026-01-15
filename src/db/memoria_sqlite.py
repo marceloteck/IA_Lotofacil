@@ -105,3 +105,24 @@ def carregar_frequencia_dezenas():
     con.close()
 
     return dict(contador)
+
+def carregar_jogos_memoria():
+    """
+    Retorna lista de tuplas:
+    ([dezenas], pontos)
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT dezenas, pontos
+        FROM memoria_premiada
+    """)
+
+    dados = []
+    for dezenas_str, pontos in cur.fetchall():
+        dezenas = [int(d) for d in dezenas_str.split(",")]
+        dados.append((dezenas, pontos))
+
+    conn.close()
+    return dados
