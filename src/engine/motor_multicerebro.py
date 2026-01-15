@@ -124,3 +124,9 @@ def gerar_jogo_inteligente():
         "avaliacao": avaliacao,
         "jogos": jogos
     }
+
+def obter_total_dezenas_atual():
+    """
+    Retorna quantas dezenas o motor usou no último ciclo.
+    """
+    return TOTAL_DEZENAS

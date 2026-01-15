@@ -25,6 +25,16 @@ def salvar_relatorio(jogos_15, jogos_18, estatisticas):
         for k, v in estatisticas.items():
             f.write(f"{k}: {v}\n")
 
+        # ==========================================
+        # 🔢 NOVO BLOCO — DISTRIBUIÇÃO DE DEZENAS
+        # ==========================================
+        if "dezenas_treinamento" in estatisticas:
+            f.write("\n" + "-" * 50 + "\n")
+            f.write("🔢 DISTRIBUIÇÃO DE DEZENAS NO TREINAMENTO\n\n")
+
+            for dezenas, total in sorted(estatisticas["dezenas_treinamento"].items()):
+                f.write(f"{dezenas} dezenas → {total} ciclos\n")
+
         f.write("\n" + "=" * 50 + "\n")
         f.write("🎯 10 JOGOS — 15 DEZENAS\n\n")
 

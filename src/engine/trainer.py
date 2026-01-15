@@ -9,6 +9,7 @@ from src.utils.dados import carregar_resultados
 from src.engine.gerador_final import gerar_jogos_finais
 from src.reports.relatorio_txt import salvar_relatorio
 
+from src.engine.motor_multicerebro import obter_total_dezenas_atual
 
 
 def treinar_sequencial():
@@ -19,6 +20,8 @@ def treinar_sequencial():
     resultados = sorted(resultados, key=lambda x: x["concurso"])
     
     avaliador = Avaliador()
+
+    contador_dezenas = {}
     
     for i in range(len(resultados) - 1):
         concurso_atual = resultados[i]["concurso"]
@@ -28,6 +31,12 @@ def treinar_sequencial():
         pontos = contar_acertos(jogo, dezenas_reais)
 
         avaliador.registrar(pontos)
+
+        total_dezenas_usadas = obter_total_dezenas_atual()
+        contador_dezenas[total_dezenas_usadas] = (
+            contador_dezenas.get(total_dezenas_usadas, 0) + 1
+        )
+
 
         print(
             f"📘 Concurso {concurso_atual} → tentando prever {concurso_atual + 1} | Pontos: {pontos}"
@@ -42,6 +51,9 @@ def treinar_sequencial():
 
     jogos_15, jogos_18 = gerar_jogos_finais()
     estatisticas = avaliador.resumo()
+
+    estatisticas["dezenas_treinamento"] = contador_dezenas
+
 
     salvar_relatorio(jogos_15, jogos_18, estatisticas)
 
