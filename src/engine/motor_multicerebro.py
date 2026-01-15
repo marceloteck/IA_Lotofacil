@@ -5,8 +5,6 @@ from src.engine.extrator_nucleo import extrair_nucleo_global, gerar_base_18_nucl
 from src.engine.cerebro_neural import avaliar_base
 from src.engine.fechamento_automatico import gerar_fechamento
 
-
-
 # ==================================
 # 🎛️ CONFIGURAÇÃO DE TREINAMENTO
 # ==================================
@@ -22,7 +20,8 @@ TOTAL_DEZENAS_FIXO = 18
 TOTAL_DEZENAS = TOTAL_DEZENAS_FIXO
 
 # Intervalo permitido quando automático
-INTERVALO_DEZENAS = [15, 16, 17, 18, 19, 20]
+#INTERVALO_DEZENAS = [15, 16, 17, 18, 19, 20]
+INTERVALO_DEZENAS = [16, 17, 18, 19, 20]
 
 UNIVERSO = list(range(1, 26))
 
