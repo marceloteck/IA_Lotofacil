@@ -16,9 +16,11 @@ while (time.time() - inicio_geral) < segundos_totais:
     subprocess.run(["python", "-m", "teste_treinamento"])
     
     tempo_restante = segundos_totais - (time.time() - inicio_geral)
+    
     if tempo_restante > 0:
-        print(f"Execução finalizada. Tempo restante: {int(tempo_restante/60)} min.")
+        minutos_faltando = int(tempo_restante / 60)
+        print(f"Execução finalizada. Tempo restante: {minutos_faltando} min.")
     else:
         print("Tempo esgotado!")
 
-print("Período de ".tempo_limite_minutos." minutos concluído.")
+print(f"Período de {tempo_limite_minutos} minutos concluído.")
