@@ -6,8 +6,8 @@ on:
 
   # ⏱️ EXECUÇÃO AUTOMÁTICA POR INTERVALO
   schedule:
-    # Executa a cada 6 horas
-    - cron: "0 */6 * * *"
+    # Executa a cada 3 horas
+    - cron: "0 */3 * * *"
 
   # 🔁 Opcional: ainda roda quando fizer push
   push:
