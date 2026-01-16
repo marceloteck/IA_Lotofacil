@@ -2,7 +2,7 @@ import os
 from datetime import datetime
 
 
-def salvar_relatorio(jogos_15, jogos_18, estatisticas):
+def salvar_relatorio(jogos_15, jogos_18, estatisticas, relatorio_avaliador):
     # 📁 Diretório base do projeto
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -17,7 +17,11 @@ def salvar_relatorio(jogos_15, jogos_18, estatisticas):
         f"relatorio_{data}.txt"
     )
 
+
     with open(caminho, "w", encoding="utf-8") as f:
+        f.write(relatorio_avaliador)
+        f.write("=" * 50 + "\n\n")
+        
         f.write("📊 RELATÓRIO FINAL — IA LOTOFÁCIL\n")
         f.write("=" * 50 + "\n\n")
 

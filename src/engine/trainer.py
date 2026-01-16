@@ -52,10 +52,13 @@ def treinar_sequencial():
     jogos_15, jogos_18 = gerar_jogos_finais()
     estatisticas = avaliador.resumo()
 
+
     estatisticas["dezenas_treinamento"] = contador_dezenas
 
+    relatorio_avaliador = avaliador.relatorio_texto()
 
-    salvar_relatorio(jogos_15, jogos_18, estatisticas)
+
+    salvar_relatorio(jogos_15, jogos_18, estatisticas, relatorio_avaliador)
 
 
     print("✅ Treinamento finalizado")

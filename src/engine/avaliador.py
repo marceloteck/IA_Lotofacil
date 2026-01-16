@@ -38,3 +38,17 @@ class Avaliador:
             "Taxa premiada (%)": round((self.premiados / self.total) * 100, 2) if self.total else 0
         }
 
+    def relatorio_texto(self):
+        linhas = []
+        linhas.append("📊 RELATÓRIO DE DESEMPENHO")
+        linhas.append("-" * 40)
+        linhas.append(f"Jogos avaliados : {self.total}")
+        linhas.append(f"Média de pontos : {self.media():.2f}")
+        linhas.append(f"Jogos 11+       : {self.premiados}")
+        linhas.append(f"Taxa premiada  : {self.taxa():.2f}%\n")
+
+        linhas.append("Distribuição de pontos:")
+        for pontos, qtd in sorted(self.distribuicao.items()):
+            linhas.append(f"  {pontos} pontos → {qtd} jogos")
+
+        return "\n".join(linhas) + "\n\n"
