@@ -9,12 +9,6 @@ on:
     # Executa a cada 3 horas
     - cron: "0 */3 * * *"
 
-  # 🔁 Opcional: ainda roda quando fizer push
-  push:
-    branches:
-      - main
-      - master
-
 jobs:
   treinamento:
     runs-on: ubuntu-latest
