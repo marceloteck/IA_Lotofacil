@@ -51,6 +51,7 @@ jobs:
       - name: 🧠 Executar treinamento
         run: |
           python -m teste_treinamento
+          python -m src.engine.calibrador_elite
 
       # 📤 Commit apenas dos relatórios e memória
       - name: 📤 Commit e Push do relatório
