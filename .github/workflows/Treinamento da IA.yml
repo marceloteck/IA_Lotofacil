@@ -48,9 +48,9 @@ jobs:
           echo "✅ CSV encontrado"
 
       # 🧠 Executar laboratório / treinamento
+      #   python -m teste_treinamento
       - name: 🧠 Executar treinamento
         run: |
-          python -m teste_treinamento
           python -m src.engine.calibrador_elite
 
       # 📤 Commit apenas dos relatórios e memória
