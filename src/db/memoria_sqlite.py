@@ -126,3 +126,31 @@ def carregar_jogos_memoria():
 
     conn.close()
     return dados
+
+def carregar_jogos_premiados(min_pontos=14):
+    import sqlite3
+    import os
+
+    DB_PATH = os.path.join(os.path.dirname(__file__), "memoria.db")
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT dezenas, pontos
+        FROM jogos_premiados
+        WHERE pontos >= ?
+    """, (min_pontos,))
+
+    registros = cursor.fetchall()
+    conn.close()
+
+    jogos = []
+    for dezenas_str, pontos in registros:
+        dezenas = [int(x) for x in dezenas_str.split(",")]
+        jogos.append({
+            "dezenas": dezenas,
+            "pontos": pontos
+        })
+
+    return jogos
