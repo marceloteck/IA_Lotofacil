@@ -3,11 +3,6 @@ name: 🧠 Gerar jogos para Lotofácil
 on:
   # ▶️ EXECUÇÃO MANUAL (BOTÃO)
   workflow_dispatch:
-  
-  push:
-    branches:
-      - main
-      - master
 
 jobs:
   treinamento:
