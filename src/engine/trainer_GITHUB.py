@@ -43,40 +43,52 @@ CONFIG_JOGOS_TREINO = {
 }
 
 # ==========================================================
-# 📤 CHECKPOINT GIT COM RETORNO ORGANIZADO
+# 📤 CHECKPOINT GIT (SAÍDA CONTROLADA)
 # ==========================================================
 
 def git_checkpoint(concurso_atual):
     try:
         subprocess.run(
             ["git", "config", "--global", "user.name", "github-actions[bot]"],
-            check=False
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
         )
         subprocess.run(
             ["git", "config", "--global", "user.email", "github-actions[bot]@users.noreply.github.com"],
-            check=False
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
         )
 
-        subprocess.run(["git", "add", "."], check=False)
+        subprocess.run(
+            ["git", "add", "."],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
 
-        resultado = subprocess.run(
+        diff = subprocess.run(
             ["git", "diff", "--cached", "--quiet"]
         )
 
-        if resultado.returncode != 0:
+        if diff.returncode != 0:
             mensagem_commit = (
                 f"🧠 Checkpoint automático | Concurso {concurso_atual} | "
                 f"{datetime.now():%Y-%m-%d %H:%M:%S}"
             )
 
-            subprocess.run(
+            commit = subprocess.run(
                 ["git", "commit", "-m", mensagem_commit],
-                check=False
+                capture_output=True,
+                text=True
             )
-            subprocess.run(["git", "push"], check=False)
+
+            push = subprocess.run(
+                ["git", "push"],
+                capture_output=True,
+                text=True
+            )
 
             # ===============================
-            # 📤 SAÍDA ORGANIZADA NO CONSOLE
+            # 📤 SAÍDA ORGANIZADA
             # ===============================
             print("\n" + "=" * 50)
             print("📤 COMMIT REALIZADO NO GITHUB")
@@ -112,26 +124,18 @@ def treinar_sequencial():
 
     avaliador = Avaliador()
     contador_dezenas = Counter()
-    historico_dezenas = []
-
     jogos_foco_1415 = []
 
     for i in range(len(resultados) - 1):
         concurso_atual = resultados[i]["concurso"]
-        dezenas_atual = resultados[i]["dezenas"]
         dezenas_reais = resultados[i + 1]["dezenas"]
 
-        historico_dezenas.append(dezenas_atual)
-
-        # ===============================
-        # 🎓 TREINO MULTIPLO
-        # ===============================
         if APRENDIZADO_MULTIPLO:
             for tamanho, quantidade in CONFIG_JOGOS_TREINO.items():
                 for _ in range(quantidade):
                     jogo = gerar_jogo()
-
                     pontos = contar_acertos(jogo, dezenas_reais)
+
                     avaliador.registrar(pontos)
                     contador_dezenas[len(jogo)] += 1
 
@@ -145,99 +149,17 @@ def treinar_sequencial():
                             "pontos": pontos
                         })
 
-                        log_treinamento(
-                            f"🔥 FOCO 14/15 | Concurso {concurso_atual} | Pontos: {pontos}"
-                        )
-
                     log_treinamento(
                         f"Concurso {concurso_atual} | Pontos: {pontos} | Tamanho: {len(jogo)}"
                     )
 
-        else:
-            jogo = gerar_jogo()
-            pontos = contar_acertos(jogo, dezenas_reais)
-
-            avaliador.registrar(pontos)
-            contador_dezenas[len(jogo)] += 1
-
-            if pontos >= 11:
-                salvar_jogo_premiado(concurso_atual, jogo, pontos)
-
-        # ===============================
-        # 📘 RETORNO DO TREINAMENTO
-        # ===============================
         print(
             f"📘 Concurso {concurso_atual} → previsão {concurso_atual + 1} | "
             f"Últimos pontos: {pontos}"
         )
 
-        # ===============================
-        # 🚀 CHECKPOINT GIT AO FINAL
-        # ===============================
+        # 🚀 CHECKPOINT GIT
         git_checkpoint(concurso_atual)
-
-    # ===============================
-    # 🔥 CONSOLIDA FOCO 14/15
-    # ===============================
-    if jogos_foco_1415:
-        for item in jogos_foco_1415:
-            salvar_jogo_premiado(
-                item["concurso"],
-                item["jogo"],
-                item["pontos"]
-            )
-
-        log_treinamento(
-            f"🔥 Total de jogos 14/15 aprendidos: {len(jogos_foco_1415)}"
-        )
-
-    # ===============================
-    # 🧠 PERFIL VENCEDOR
-    # ===============================
-    gerar_perfil_vencedor()
-    avaliador.relatorio()
-
-    # ===============================
-    # 🔥 ESTATÍSTICAS
-    # ===============================
-    dezenas_quentes, dezenas_frias = calcular_dezenas_quentes_frias()
-    ultimo_resultado = resultados[-1]["dezenas"]
-
-    # ===============================
-    # ⚙️ CALIBRAÇÃO DE PESOS
-    # ===============================
-    jogos_1415 = carregar_jogos_premiados(min_pontos=14)
-
-    if jogos_1415:
-        calibrar_pesos(jogos_1415)
-        log_treinamento("⚙️ Pesos calibrados com jogos 14/15")
-    else:
-        log_treinamento("⚠️ Sem jogos 14/15 para calibração")
-
-    # ===============================
-    # 🎯 GERAÇÃO FINAL
-    # ===============================
-    jogos_15, jogos_18 = gerar_jogos_finais(
-        dezenas_quentes=dezenas_quentes,
-        dezenas_frias=dezenas_frias,
-        ultimo_resultado=ultimo_resultado,
-        pesos=None
-    )
-
-    # ===============================
-    # 📄 RELATÓRIO
-    # ===============================
-    estatisticas = avaliador.resumo()
-    estatisticas["dezenas_treinamento"] = dict(contador_dezenas)
-
-    relatorio_avaliador = avaliador.relatorio_texto()
-
-    salvar_relatorio(
-        jogos_15,
-        jogos_18,
-        estatisticas,
-        relatorio_avaliador
-    )
 
     print("\n✅ Treinamento finalizado com sucesso")
 
