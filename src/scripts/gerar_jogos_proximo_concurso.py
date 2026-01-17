@@ -13,7 +13,9 @@ from src.utils.dados import carregar_resultados
 def gerar_jogos_proximo_concurso():
     print("\n🔮 GERANDO JOGOS PARA O PRÓXIMO CONCURSO\n")
 
-    # 🔎 Garantir que existe aprendizado
+    # ===============================
+    # 🔎 VERIFICA APRENDIZADO
+    # ===============================
     perfil = obter_perfil_vencedor()
     if not perfil:
         print("❌ Nenhum perfil vencedor encontrado.")
@@ -33,17 +35,16 @@ def gerar_jogos_proximo_concurso():
     ultimo_resultado = resultados[-1]["dezenas"]
 
     # ===============================
-    # 🎯 GERAÇÃO FINAL
+    # 🎯 GERAÇÃO FINAL (COMPATÍVEL)
     # ===============================
     jogos_15, jogos_18 = gerar_jogos_finais(
-        dezenas_quentes=dezenas_quentes,
-        dezenas_frias=dezenas_frias,
-        ultimo_resultado=ultimo_resultado,
-        pesos=None  # mantém compatibilidade total
+        dezenas_quentes,
+        dezenas_frias,
+        ultimo_resultado
     )
 
     # ===============================
-    # 📊 INFO DO MOTOR
+    # 🧠 INFO DO MOTOR
     # ===============================
     dezenas_motor = obter_total_dezenas_atual()
     print(f"🧠 Motor ativo com {dezenas_motor} dezenas no momento\n")
