@@ -16,12 +16,16 @@ from src.utils.comparador import contar_acertos
 from src.utils.dados import carregar_resultados
 from src.reports.relatorio_txt import salvar_relatorio
 
+from src.logger import log_treinamento
+
+log_treinamento("🧠 Treinamento iniciado")
+
 # ===============================
 # ⚙️ CONFIGURAÇÃO DE APRENDIZADO
 # ===============================
 
 APRENDIZADO_MULTIPLO = True
-MODO_FOCO_1415 = True  # ← NOVO (opcional)
+MODO_FOCO_1415 = True  # ← ATIVO
 
 CONFIG_JOGOS_TREINO = {
     16: 5,
@@ -39,6 +43,9 @@ def treinar_sequencial():
     contador_dezenas = Counter()
 
     historico_dezenas = []
+
+    # 🔥 BUFFER DE APRENDIZADO FOCO 14/15
+    jogos_foco_1415 = []
 
     for i in range(len(resultados) - 1):
         concurso_atual = resultados[i]["concurso"]
@@ -60,15 +67,29 @@ def treinar_sequencial():
 
                     contador_dezenas[len(jogo)] += 1
 
+                    # 💾 Memória geral (>=11)
                     if pontos >= 11:
                         salvar_jogo_premiado(concurso_atual, jogo, pontos)
 
+                    # 🔥 FOCO REAL 14/15 (aprendizado incremental)
                     if MODO_FOCO_1415 and pontos >= 14:
-                        print("🔥 FOCO 14/15 ATIVADO → aprendizado reforçado")
+                        jogos_foco_1415.append({
+                            "concurso": concurso_atual,
+                            "jogo": jogo,
+                            "pontos": pontos
+                        })
+                        log_treinamento(
+                            f"🔥 FOCO 14/15 | Concurso {concurso_atual} | Pontos: {pontos}"
+                        )
+
+                    log_treinamento(
+                        f"Concurso {concurso_atual} | Pontos: {pontos} | Tamanho: {len(jogo)}"
+                    )
 
         else:
             jogo = gerar_jogo()
             pontos = contar_acertos(jogo, dezenas_reais)
+
             avaliador.registrar(pontos)
             contador_dezenas[len(jogo)] += 1
 
@@ -77,6 +98,21 @@ def treinar_sequencial():
 
         print(
             f"📘 Concurso {concurso_atual} → previsão {concurso_atual + 1} | Últimos pontos: {pontos}"
+        )
+
+    # ===============================
+    # 🔥 CONSOLIDA APRENDIZADO 14/15
+    # ===============================
+    if jogos_foco_1415:
+        for item in jogos_foco_1415:
+            salvar_jogo_premiado(
+                item["concurso"],
+                item["jogo"],
+                item["pontos"]
+            )
+
+        log_treinamento(
+            f"🔥 Total de jogos 14/15 aprendidos: {len(jogos_foco_1415)}"
         )
 
     # ===============================
@@ -99,9 +135,11 @@ def treinar_sequencial():
     if jogos_1415:
         pesos_calibrados = calibrar_pesos(jogos_1415)
         print("⚙️ Pesos calibrados:", pesos_calibrados)
+        log_treinamento("⚙️ Pesos calibrados com jogos 14/15")
     else:
         pesos_calibrados = None
         print("⚠️ Sem jogos 14/15 suficientes")
+        log_treinamento("⚠️ Sem jogos 14/15 para calibração")
 
     # ===============================
     # 🎯 GERAÇÃO FINAL
