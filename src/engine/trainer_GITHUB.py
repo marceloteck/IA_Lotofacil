@@ -1,5 +1,5 @@
 # ==========================================================
-# 🧠 TREINAMENTO IA LOTOFÁCIL — COM CHECKPOINT GIT POR LOOP
+# 🧠 TREINAMENTO IA LOTOFÁCIL — CHECKPOINT GIT ORGANIZADO
 # ==========================================================
 
 import subprocess
@@ -34,7 +34,7 @@ log_treinamento("🧠 Treinamento iniciado")
 # ==========================================================
 
 APRENDIZADO_MULTIPLO = True
-MODO_FOCO_1415 = True  # ← ATIVO
+MODO_FOCO_1415 = True
 
 CONFIG_JOGOS_TREINO = {
     16: 5,
@@ -43,7 +43,7 @@ CONFIG_JOGOS_TREINO = {
 }
 
 # ==========================================================
-# 📤 CHECKPOINT GIT (IGUAL GITHUB ACTIONS)
+# 📤 CHECKPOINT GIT COM RETORNO ORGANIZADO
 # ==========================================================
 
 def git_checkpoint(concurso_atual):
@@ -64,18 +64,40 @@ def git_checkpoint(concurso_atual):
         )
 
         if resultado.returncode != 0:
-            mensagem = (
+            mensagem_commit = (
                 f"🧠 Checkpoint automático | Concurso {concurso_atual} | "
                 f"{datetime.now():%Y-%m-%d %H:%M:%S}"
             )
-            subprocess.run(["git", "commit", "-m", mensagem], check=False)
+
+            subprocess.run(
+                ["git", "commit", "-m", mensagem_commit],
+                check=False
+            )
             subprocess.run(["git", "push"], check=False)
 
-            log_treinamento(f"📤 Git push realizado no concurso {concurso_atual}")
+            # ===============================
+            # 📤 SAÍDA ORGANIZADA NO CONSOLE
+            # ===============================
+            print("\n" + "=" * 50)
+            print("📤 COMMIT REALIZADO NO GITHUB")
+            print(mensagem_commit)
+            print("=" * 50 + "\n")
+
+            log_treinamento(f"📤 Git push realizado | Concurso {concurso_atual}")
+
         else:
+            print("\n" + "=" * 50)
+            print("📭 NENHUMA ALTERAÇÃO PARA COMMIT")
+            print("=" * 50 + "\n")
+
             log_treinamento("📭 Nenhuma alteração para commit")
 
     except Exception as e:
+        print("\n" + "=" * 50)
+        print("❌ ERRO NO CHECKPOINT GIT")
+        print(str(e))
+        print("=" * 50 + "\n")
+
         log_treinamento(f"❌ Erro no checkpoint Git: {e}")
 
 # ==========================================================
@@ -83,7 +105,7 @@ def git_checkpoint(concurso_atual):
 # ==========================================================
 
 def treinar_sequencial():
-    print("🧠 Treinamento sequencial iniciado")
+    print("🧠 Treinamento sequencial iniciado\n")
 
     resultados = carregar_resultados()
     resultados = sorted(resultados, key=lambda x: x["concurso"])
@@ -122,6 +144,7 @@ def treinar_sequencial():
                             "jogo": jogo,
                             "pontos": pontos
                         })
+
                         log_treinamento(
                             f"🔥 FOCO 14/15 | Concurso {concurso_atual} | Pontos: {pontos}"
                         )
@@ -140,13 +163,17 @@ def treinar_sequencial():
             if pontos >= 11:
                 salvar_jogo_premiado(concurso_atual, jogo, pontos)
 
+        # ===============================
+        # 📘 RETORNO DO TREINAMENTO
+        # ===============================
         print(
-            f"📘 Concurso {concurso_atual} → previsão {concurso_atual + 1} | Últimos pontos: {pontos}"
+            f"📘 Concurso {concurso_atual} → previsão {concurso_atual + 1} | "
+            f"Últimos pontos: {pontos}"
         )
 
-        # ==================================================
-        # 🚀 CHECKPOINT GIT AO FINAL DE CADA LOOP
-        # ==================================================
+        # ===============================
+        # 🚀 CHECKPOINT GIT AO FINAL
+        # ===============================
         git_checkpoint(concurso_atual)
 
     # ===============================
@@ -182,10 +209,9 @@ def treinar_sequencial():
     jogos_1415 = carregar_jogos_premiados(min_pontos=14)
 
     if jogos_1415:
-        pesos_calibrados = calibrar_pesos(jogos_1415)
+        calibrar_pesos(jogos_1415)
         log_treinamento("⚙️ Pesos calibrados com jogos 14/15")
     else:
-        pesos_calibrados = None
         log_treinamento("⚠️ Sem jogos 14/15 para calibração")
 
     # ===============================
@@ -195,7 +221,7 @@ def treinar_sequencial():
         dezenas_quentes=dezenas_quentes,
         dezenas_frias=dezenas_frias,
         ultimo_resultado=ultimo_resultado,
-        pesos=pesos_calibrados
+        pesos=None
     )
 
     # ===============================
@@ -213,7 +239,7 @@ def treinar_sequencial():
         relatorio_avaliador
     )
 
-    print("✅ Treinamento finalizado com sucesso")
+    print("\n✅ Treinamento finalizado com sucesso")
 
 # ==========================================================
 # ▶️ EXECUÇÃO
