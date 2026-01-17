@@ -1,6 +1,6 @@
 from collections import Counter
 
-from src.engine.motor_multicerebro import gerar_jogo
+from src.engine.motor_multicerebro import gerar_jogo, obter_total_dezenas_atual
 from src.engine.aprendiz import gerar_perfil_vencedor
 from src.engine.avaliador import Avaliador
 from src.engine.estatisticas import calcular_dezenas_quentes_frias
@@ -21,23 +21,34 @@ from src.reports.relatorio_txt import salvar_relatorio
 # ===============================
 
 APRENDIZADO_MULTIPLO = True
-MODO_FOCO_1415 = True  # ← NOVO (opcional)
 
 CONFIG_JOGOS_TREINO = {
-    16: 5,
-    18: 3,
-    20: 2
+    16: 5,   # 5 jogos de 16 dezenas
+    18: 3,   # 3 jogos de 18 dezenas
+    20: 2    # 2 jogos de 20 dezenas
 }
+
+MODO_FOCO_1415 = True
+
+
 
 def treinar_sequencial():
     print("🧠 Treinamento sequencial iniciado")
 
+    # ===============================
+    # 📥 CARREGA RESULTADOS OFICIAIS
+    # ===============================
     resultados = carregar_resultados()
+
+    # Garantir ordem cronológica (antigo → novo)
     resultados = sorted(resultados, key=lambda x: x["concurso"])
 
     avaliador = Avaliador()
-    contador_dezenas = Counter()
+    contador_dezenas = {}
 
+    # ===============================
+    # 📊 HISTÓRICO GLOBAL
+    # ===============================
     historico_dezenas = []
 
     for i in range(len(resultados) - 1):
@@ -48,76 +59,108 @@ def treinar_sequencial():
         historico_dezenas.append(dezenas_atual)
 
         # ===============================
-        # 🎓 TREINO MULTIPLO CONTROLADO
+        # 🎓 APRENDIZADO
         # ===============================
         if APRENDIZADO_MULTIPLO:
             for tamanho, quantidade in CONFIG_JOGOS_TREINO.items():
-                for _ in range(quantidade):
+                for _ in range(quantidade):  
                     jogo = gerar_jogo()
 
                     pontos = contar_acertos(jogo, dezenas_reais)
                     avaliador.registrar(pontos)
 
-                    contador_dezenas[len(jogo)] += 1
+                    total_dezenas_usadas = len(jogo)
+                    contador_dezenas[total_dezenas_usadas] = (
+                        contador_dezenas.get(total_dezenas_usadas, 0) + 1
+                    )
+
+                    print(
+                        f"📘 Concurso {concurso_atual} → previsão {concurso_atual + 1} | Pontos: {pontos}"
+                    )
 
                     if pontos >= 11:
+                        print("💰 JOGO PREMIADO! Salvando na memória")
                         salvar_jogo_premiado(concurso_atual, jogo, pontos)
-
-                    if MODO_FOCO_1415 and pontos >= 14:
-                        print("🔥 FOCO 14/15 ATIVADO → aprendizado reforçado")
 
         else:
             jogo = gerar_jogo()
             pontos = contar_acertos(jogo, dezenas_reais)
             avaliador.registrar(pontos)
-            contador_dezenas[len(jogo)] += 1
 
-            if pontos >= 11:
-                salvar_jogo_premiado(concurso_atual, jogo, pontos)
+            total_dezenas_usadas = len(jogo)
+            contador_dezenas[total_dezenas_usadas] = (
+                contador_dezenas.get(total_dezenas_usadas, 0) + 1
+            )
 
         print(
-            f"📘 Concurso {concurso_atual} → previsão {concurso_atual + 1} | Últimos pontos: {pontos}"
+            f"📘 Concurso {concurso_atual} → previsão {concurso_atual + 1} | Pontos: {pontos}"
         )
 
+        if pontos >= 11:
+            print("💰 JOGO PREMIADO! Salvando na memória")
+            salvar_jogo_premiado(concurso_atual, jogo, pontos)
+
+
+
+
+
+
+        # 📊 Controle de tamanho dos jogos
+        total_dezenas_usadas = obter_total_dezenas_atual()
+        contador_dezenas[total_dezenas_usadas] = (
+            contador_dezenas.get(total_dezenas_usadas, 0) + 1
+        )
+
+        print(
+            f"📘 Concurso {concurso_atual} → previsão {concurso_atual + 1} | Pontos: {pontos}"
+        )
+
+        # 💰 Salva memória premiada (>=11)
+        if pontos >= 11:
+            print("💰 JOGO PREMIADO! Salvando na memória")
+            salvar_jogo_premiado(concurso_atual, jogo, pontos)
+
     # ===============================
-    # 🧠 PERFIL VENCEDOR
+    # 🧠 PERFIL VENCEDOR (como já existia)
     # ===============================
     gerar_perfil_vencedor()
     avaliador.relatorio()
 
     # ===============================
-    # 🔥 ESTATÍSTICAS REAIS
+    # 🔥 ESTATÍSTICAS REAIS DO HISTÓRICO
     # ===============================
     dezenas_quentes, dezenas_frias = calcular_dezenas_quentes_frias()
+
+    # Último resultado conhecido
     ultimo_resultado = resultados[-1]["dezenas"]
 
     # ===============================
-    # ⚙️ CALIBRAÇÃO DE PESOS
+    # 🧠 CALIBRAÇÃO AUTOMÁTICA DE PESOS
     # ===============================
     jogos_1415 = carregar_jogos_premiados(min_pontos=14)
 
     if jogos_1415:
         pesos_calibrados = calibrar_pesos(jogos_1415)
-        print("⚙️ Pesos calibrados:", pesos_calibrados)
+        print("⚙️ Pesos calibrados automaticamente:", pesos_calibrados)
     else:
         pesos_calibrados = None
-        print("⚠️ Sem jogos 14/15 suficientes")
+        print("⚠️ Ainda não há jogos 14/15 suficientes para calibração")
 
     # ===============================
-    # 🎯 GERAÇÃO FINAL
+    # 🎯 GERAÇÃO FINAL DE JOGOS
     # ===============================
     jogos_15, jogos_18 = gerar_jogos_finais(
         dezenas_quentes=dezenas_quentes,
         dezenas_frias=dezenas_frias,
         ultimo_resultado=ultimo_resultado,
-        pesos=pesos_calibrados
+        pesos=pesos_calibrados  # ← NOVO (opcional e seguro)
     )
 
     # ===============================
-    # 📄 RELATÓRIO
+    # 📄 RELATÓRIO FINAL
     # ===============================
     estatisticas = avaliador.resumo()
-    estatisticas["dezenas_treinamento"] = dict(contador_dezenas)
+    estatisticas["dezenas_treinamento"] = contador_dezenas
 
     relatorio_avaliador = avaliador.relatorio_texto()
 
