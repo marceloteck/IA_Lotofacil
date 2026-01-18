@@ -9,6 +9,7 @@ venv/
 # =========================
 # Python cache / bytecode
 # =========================
+*.pyc
 __pycache__/
 *.py[cod]
 *$py.class
