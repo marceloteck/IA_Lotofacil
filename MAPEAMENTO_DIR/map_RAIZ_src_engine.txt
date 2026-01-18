@@ -1,0 +1,2049 @@
+>>> FILE: .\src\engine\aprendiz.py
+import json
+import os
+from collections import Counter
+from src.db.memoria_sqlite import carregar_memoria_premiada
+
+ARQUIVO_PERFIL = "src/memory/perfil_vencedor.json"
+
+def gerar_perfil_vencedor():
+    jogos = carregar_memoria_premiada()
+
+    if not jogos:
+        print("⚠️ Nenhum jogo premiado (11+) para aprendizado")
+        return
+
+    contador = Counter()
+    pares = []
+    somas = []
+
+    for jogo in jogos:
+        dezenas = jogo["dezenas"]
+        contador.update(dezenas)
+        pares.append(sum(1 for d in dezenas if d % 2 == 0))
+        somas.append(sum(dezenas))
+
+    # 🔥 TOP dezenas mais recorrentes
+    top_dezenas = [int(d) for d, _ in contador.most_common(15)]
+
+    perfil = {
+        "top_dezenas": top_dezenas,
+        "frequencia_dezenas": dict(contador),
+        "media_pares": round(sum(pares) / len(pares), 2),
+        "media_soma": round(sum(somas) / len(somas), 2),
+        "total_jogos": len(jogos)
+    }
+
+    os.makedirs("src/memory", exist_ok=True)
+
+    with open(ARQUIVO_PERFIL, "w", encoding="utf-8") as f:
+        json.dump(perfil, f, indent=4, ensure_ascii=False)
+
+    print(f"🧠 Perfil vencedor aprendido com {len(jogos)} jogos")
+
+def obter_perfil_vencedor():
+    """
+    Retorna APENAS uma lista de dezenas (contrato fixo)
+    """
+    if not os.path.exists(ARQUIVO_PERFIL):
+        return []
+
+    with open(ARQUIVO_PERFIL, "r", encoding="utf-8") as f:
+        perfil = json.load(f)
+
+    return perfil.get("top_dezenas", [])
+
+>>> FILE: .\src\engine\avaliador.py
+from collections import defaultdict
+
+class Avaliador:
+    def __init__(self):
+        self.total = 0
+        self.soma_pontos = 0
+        self.soma_pesos = 0.0
+
+        self.distribuicao = defaultdict(int)
+        self.distribuicao_peso = defaultdict(float)
+
+        self.premiados = 0
+
+    def peso_aprendizado(self, pontos):
+        if pontos >= 15:
+            return 3.0
+        elif pontos >= 14:
+            return 2.0
+        elif pontos >= 12:
+            return 1.0
+        elif pontos >= 11:
+            return 0.4
+        else:
+            return 0.2
+
+    def registrar(self, pontos):
+        peso = self.peso_aprendizado(pontos)
+
+        self.total += 1
+        self.soma_pontos += pontos
+        self.soma_pesos += peso
+
+        self.distribuicao[pontos] += 1
+        self.distribuicao_peso[pontos] += peso
+
+        if pontos >= 11:
+            self.premiados += 1
+
+    # -------------------------------
+    # MÉTRICAS
+    # -------------------------------
+    def media(self):
+        return self.soma_pontos / self.total if self.total else 0
+
+    def media_ponderada(self):
+        return self.soma_pontos / self.soma_pesos if self.soma_pesos else 0
+
+    def taxa(self):
+        return (self.premiados / self.total) * 100 if self.total else 0
+
+    def relatorio(self):
+        print("\n📊 RELATÓRIO DE DESEMPENHO")
+        print("-" * 40)
+        print(f"Jogos avaliados        : {self.total}")
+        print(f"Média simples          : {self.media():.2f}")
+        print(f"Média ponderada        : {self.media_ponderada():.2f}")
+        print(f"Jogos 11+              : {self.premiados}")
+        print(f"Taxa premiada          : {self.taxa():.2f}%")
+
+        print("\nDistribuição de pontos (peso):")
+        for pontos in sorted(self.distribuicao):
+            print(
+                f"  {pontos} pontos → {self.distribuicao[pontos]} jogos "
+                f"(peso acumulado: {self.distribuicao_peso[pontos]:.2f})"
+            )
+
+    def resumo(self):
+        return {
+            "Jogos avaliados": self.total,
+            "Média simples": round(self.media(), 2),
+            "Média ponderada": round(self.media_ponderada(), 2),
+            "Jogos 11+": self.premiados,
+            "Taxa premiada (%)": round(self.taxa(), 2)
+        }
+
+    def relatorio_texto(self):
+        linhas = []
+        linhas.append("📊 RELATÓRIO DE DESEMPENHO")
+        linhas.append("-" * 40)
+        linhas.append(f"Jogos avaliados        : {self.total}")
+        linhas.append(f"Média simples          : {self.media():.2f}")
+        linhas.append(f"Média ponderada        : {self.media_ponderada():.2f}")
+        linhas.append(f"Jogos 11+              : {self.premiados}")
+        linhas.append(f"Taxa premiada          : {self.taxa():.2f}%\n")
+
+        linhas.append("Distribuição de pontos (peso):")
+        for pontos in sorted(self.distribuicao):
+            linhas.append(
+                f"  {pontos} pontos → {self.distribuicao[pontos]} jogos "
+                f"(peso: {self.distribuicao_peso[pontos]:.2f})"
+            )
+
+        return "\n".join(linhas) + "\n\n"
+
+>>> FILE: .\src\engine\calibrador_elite.py
+import json
+import os
+from statistics import mean
+from collections import Counter
+
+from src.db.memoria_sqlite import carregar_jogos_premiados
+from src.utils.dados import carregar_resultados
+
+ARQ_CALIBRACAO = "src/engine/calibracao_elite.json"
+
+def analisar_jogo(jogo, ultimo_resultado, quentes, frias):
+    return {
+        "quentes": len(set(jogo) & quentes),
+        "frias": len(set(jogo) & frias),
+        "repetidas": len(set(jogo) & set(ultimo_resultado)),
+        "pares": sum(1 for n in jogo if n % 2 == 0),
+        "soma": sum(jogo)
+    }
+
+def calibrar_filtro_elite():
+    print("🧪 Calibração Elite iniciada")
+
+    jogos = carregar_jogos_premiados(min_pontos=14)
+    resultados = carregar_resultados()
+
+    if not jogos:
+        print("⚠️ Nenhum jogo premiado encontrado para calibração")
+        return
+
+    ultimo_resultado = resultados[-1]["dezenas"]
+
+    # 🔥 Frequência global
+    freq = Counter()
+    for r in resultados:
+        freq.update(r["dezenas"])
+
+    ordenadas = [n for n, _ in freq.most_common()]
+    quentes = set(ordenadas[:10])
+    frias = set(ordenadas[-10:])
+
+    metricas = {
+        "quentes": [],
+        "frias": [],
+        "repetidas": [],
+        "pares": [],
+        "soma": []
+    }
+
+    for jogo in jogos:
+        dados = analisar_jogo(jogo["dezenas"], ultimo_resultado, quentes, frias)
+        for k in metricas:
+            metricas[k].append(dados[k])
+
+    calibracao = {}
+    for k, valores in metricas.items():
+        calibracao[k] = {
+            "min": min(valores),
+            "max": max(valores),
+            "media": round(mean(valores), 2)
+        }
+
+    os.makedirs(os.path.dirname(ARQ_CALIBRACAO), exist_ok=True)
+    with open(ARQ_CALIBRACAO, "w", encoding="utf-8") as f:
+        json.dump(calibracao, f, indent=4)
+
+    print("✅ Calibração concluída")
+    print(f"📁 Arquivo salvo em {ARQ_CALIBRACAO}")
+
+>>> FILE: .\src\engine\calibrador_pesos.py
+from statistics import mean
+
+def calibrar_pesos(jogos_premiados):
+    """
+    Recebe lista de:
+    {
+        'dezenas': [...],
+        'pontos': 14 ou 15
+    }
+    Retorna pesos calibrados
+    """
+
+    metricas = {
+        "quentes": [],
+        "frias": [],
+        "repetidas": [],
+        "pares": [],
+    }
+
+    for jogo in jogos_premiados:
+        dezenas = set(jogo["dezenas"])
+
+        metricas["quentes"].append(jogo.get("q_quentes", 0))
+        metricas["frias"].append(jogo.get("q_frias", 0))
+        metricas["repetidas"].append(jogo.get("q_repetidas", 0))
+        metricas["pares"].append(jogo.get("q_pares", 0))
+
+    pesos = {
+        "peso_quentes": round(20 / (mean(metricas["quentes"]) + 1), 2),
+        "peso_frias": round(5 / (mean(metricas["frias"]) + 1), 2),
+        "peso_repetidas": round(30 / (mean(metricas["repetidas"]) + 1), 2),
+        "peso_pares": round(10 / (mean(metricas["pares"]) + 1), 2),
+    }
+
+    return pesos
+
+>>> FILE: .\src\engine\cerebros_memoria.py
+"""
+🧠 CÉREBROS DE MEMÓRIA — IA HISTÓRICA
+Avalia jogos com base em tudo que já deu 11–15 pontos.
+"""
+
+from collections import Counter
+from typing import List, Tuple
+
+from src.db.memoria_sqlite import carregar_memoria_premiada
+from src.utils.logger import logger
+
+class CerebrosMemoria:
+    """
+    Motor de avaliação baseado em memória premiada real.
+    """
+
+    def __init__(self):
+        self.memoria = []
+        self.contagem_dezenas = Counter()
+        self._carregar_memoria()
+
+    # --------------------------------------------------
+    # 📥 CARGA DA MEMÓRIA
+    # --------------------------------------------------
+    def _carregar_memoria(self):
+        registros = carregar_memoria_premiada()
+
+        if not registros:
+            logger.warning("⚠️ Memória premiada vazia")
+            return
+
+        for r in registros:
+            dezenas = sorted(r["dezenas"])
+            pontos = int(r["pontos"])
+
+            self.memoria.append({
+                "dezenas": dezenas,
+                "pontos": pontos
+            })
+
+            # Peso maior para jogos melhores
+            peso = pontos - 10  # 11→1, 15→5
+            for d in dezenas:
+                self.contagem_dezenas[d] += peso
+
+        logger.info(
+            f"🧠 Memória carregada | Jogos: {len(self.memoria)} | "
+            f"Dezenas únicas: {len(self.contagem_dezenas)}"
+        )
+
+    # --------------------------------------------------
+    # 🎯 SCORE PRINCIPAL
+    # --------------------------------------------------
+    def score_final(self, jogo: List[int]) -> Tuple[float, dict]:
+        """
+        Score baseado em alinhamento com a memória histórica
+        """
+
+        score = 0.0
+        detalhes = {}
+
+        # 🔢 Score por dezenas fortes na memória
+        pontos_memoria = sum(
+            self.contagem_dezenas.get(d, 0)
+            for d in jogo
+        )
+
+        score += pontos_memoria
+        detalhes["memoria_dezenas"] = pontos_memoria
+
+        # 🔁 Similaridade com jogos premiados
+        similaridades = []
+        for m in self.memoria:
+            inter = len(set(jogo) & set(m["dezenas"]))
+            if inter >= 11:
+                similaridades.append(inter)
+
+        bonus_similaridade = sum(similaridades) * 2
+        score += bonus_similaridade
+        detalhes["similaridade"] = bonus_similaridade
+
+        return score, detalhes
+
+# --------------------------------------------------
+# 🧠 SINGLETON GLOBAL
+# --------------------------------------------------
+_cerebro_global = None
+
+def obter_cerebros_memoria() -> CerebrosMemoria:
+    global _cerebro_global
+
+    if _cerebro_global is None:
+        _cerebro_global = CerebrosMemoria()
+
+    return _cerebro_global
+
+>>> FILE: .\src\engine\cerebro_neural.py
+# ==========================================================
+# 🤖 CÉREBRO NEURAL CONSULTIVO (SIMPLIFICADO)
+# ==========================================================
+
+def avaliar_base(base):
+    pares = len([x for x in base if x % 2 == 0])
+    impares = len(base) - pares
+
+    equilibrio = 1 - abs(pares - impares) / len(base)
+
+    score = round(0.6 * equilibrio + 0.4, 2)
+
+    return {
+        "score": score,
+        "equilibrio": equilibrio,
+        "aprovado": score >= 0.75
+    }
+
+>>> FILE: .\src\engine\checkpoint.py
+# src/engine/checkpoint.py
+
+import json
+import os
+
+CHECKPOINT_PATH = "data/checkpoint.json"
+
+def salvar_checkpoint(dados):
+    os.makedirs("data", exist_ok=True)
+    with open(CHECKPOINT_PATH, "w", encoding="utf-8") as f:
+        json.dump(dados, f, indent=4)
+
+def carregar_checkpoint():
+    if not os.path.exists(CHECKPOINT_PATH):
+        return None
+    with open(CHECKPOINT_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+>>> FILE: .\src\engine\engine.py
+from src.engine.brains.brain_stats import gerar_base_stats
+from src.engine.brains.brain_explorer import gerar_base_exploracao
+from src.engine.scorer import score_total
+from src.database.state import carregar_estado, salvar_estado
+from src.analysis.analyzer import analisar_jogo
+from src.analysis.pontos import calcular_pontos_reais
+from src.database.connection import get_conn
+
+TODAS = list(range(1, 26))
+
+def executar_motor(resultado_real):
+    print("🚀 Motor Multicérebro iniciado")
+
+    estado = carregar_estado()
+    tentativa = estado["tentativas"]
+    limite = estado["limite_tentativas"]
+
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT numero FROM frequencias ORDER BY peso DESC")
+    freq_rank = [int(r[0]) for r in cursor.fetchall()]
+
+    melhor_pontos = 0
+    melhor_score = 0
+    melhor_base = None
+
+    while tentativa < limite:
+        tentativa += 1
+
+        base_stats = gerar_base_stats(freq_rank)
+        base_exploracao = gerar_base_exploracao(TODAS)
+
+        metricas = analisar_jogo(base_stats)
+        pontos_reais = calcular_pontos_reais(base_stats, resultado_real)
+
+        score = score_total(
+            base_stats,
+            [base_exploracao],
+            pontos_reais,
+            metricas["score_heuristico"]
+        )
+
+        if pontos_reais > melhor_pontos or score > melhor_score:
+            melhor_pontos = pontos_reais
+            melhor_score = score
+            melhor_base = base_stats
+
+            print(f"⭐ Novo melhor: {melhor_pontos} pontos | score {melhor_score}")
+
+        salvar_estado(tentativa, melhor_pontos)
+
+        if pontos_reais >= 11:
+            break
+
+    conn.close()
+
+    return {
+        "pontos": melhor_pontos,
+        "score": melhor_score,
+        "base": melhor_base
+    }
+
+>>> FILE: .\src\engine\estatisticas.py
+# ==========================================================
+# 📊 ESTATÍSTICAS — DEZENAS QUENTES E FRIAS
+# ==========================================================
+
+from collections import Counter
+from src.db.memoria_sqlite import carregar_historico
+
+def calcular_dezenas_quentes_frias():
+    """
+    Retorna duas listas:
+    - dezenas quentes (mais frequentes)
+    - dezenas frias (menos frequentes)
+    """
+
+    historico = carregar_historico()
+
+    todas = []
+    for concurso in historico:
+        todas.extend(concurso)
+
+    freq = Counter(todas)
+
+    ordenadas = freq.most_common()
+
+    dezenas_quentes = [n for n, _ in ordenadas[:8]]
+    dezenas_frias = [n for n, _ in ordenadas[-8:]]
+
+    return dezenas_quentes, dezenas_frias
+
+>>> FILE: .\src\engine\evaluator.py
+def contar_acertos(base, concurso_real):
+    """
+    base: set ou list com 18 dezenas
+    concurso_real: set com 15 dezenas
+    """
+    return len(set(base) & set(concurso_real))
+
+>>> FILE: .\src\engine\extrator_nucleo.py
+# ==========================================================
+# 🧠 EXTRATOR DE NÚCLEO GLOBAL (EVOLUÍDO)
+# ==========================================================
+
+from collections import defaultdict
+import random
+from src.db.memoria_sqlite import carregar_jogos_memoria
+from src.db.memoria_sqlite import carregar_frequencia_dezenas
+
+PESOS = {
+    11: 1.0,
+    12: 2.0,
+    13: 4.0,
+    14: 6.0,
+}
+
+UNIVERSO = list(range(1, 26))
+
+def extrair_nucleo_global():
+    """
+    Retorna:
+    - nucleo: dezenas mais fortes
+    - satelites: dezenas boas
+    - descartaveis: dezenas fracas
+    """
+
+    jogos = carregar_jogos_memoria()  # [(dezenas, pontos), ...]
+    score = defaultdict(float)
+
+    for dezenas, pontos in jogos:
+        if pontos not in PESOS:
+            continue
+
+        peso = PESOS[pontos]
+        for d in dezenas:
+            score[int(d)] += peso
+
+    if not score:
+        return {"nucleo": [], "satelites": [], "descartaveis": []}
+
+    ordenadas = sorted(score.items(), key=lambda x: x[1], reverse=True)
+    dezenas_ordenadas = [d for d, _ in ordenadas]
+
+    return {
+        "nucleo": dezenas_ordenadas[:6],
+        "satelites": dezenas_ordenadas[6:14],
+        "descartaveis": dezenas_ordenadas[14:]
+    }
+
+# ==========================================================
+# 🚀 NOVO: GERADOR DE BASE 18 USANDO O NÚCLEO
+# ==========================================================
+
+def gerar_base_18_nucleo():
+    """
+    Gera uma base 18 de altíssima qualidade usando:
+    - núcleo vencedor
+    - satélites
+    - frequência histórica
+    - diversidade controlada
+    """
+
+    estrutura = extrair_nucleo_global()
+    freq = carregar_frequencia_dezenas() or {}
+
+    base = set()
+
+    # 1️⃣ Núcleo (prioridade máxima)
+    base.update(estrutura["nucleo"])
+
+    # 2️⃣ Satélites
+    if len(base) < 12:
+        faltam = 12 - len(base)
+        base.update(estrutura["satelites"][:faltam])
+
+    # 3️⃣ Frequência histórica
+    ordenadas_freq = sorted(freq.items(), key=lambda x: x[1], reverse=True)
+    for d, _ in ordenadas_freq:
+        if len(base) >= 18:
+            break
+        base.add(int(d))
+
+    # 4️⃣ Diversidade (anti-vício)
+    if len(base) < 18:
+        restantes = list(set(UNIVERSO) - base)
+        base.update(random.sample(restantes, 18 - len(base)))
+
+    return sorted(base)
+
+>>> FILE: .\src\engine\fechamento_automatico.py
+# ==========================================================
+# 🎯 FECHAMENTO AUTOMÁTICO INTELIGENTE
+# ==========================================================
+
+import itertools
+
+def gerar_fechamento(base, tamanho_jogo=15, max_jogos=100):
+    combinacoes = itertools.combinations(base, tamanho_jogo)
+
+    jogos = []
+    for comb in combinacoes:
+        jogos.append(list(comb))
+        if len(jogos) >= max_jogos:
+            break
+
+    return jogos
+
+>>> FILE: .\src\engine\filtro_elite.py
+import json
+import os
+
+ARQ_CALIBRACAO = "src/engine/calibracao_elite.json"
+
+def carregar_calibracao():
+    if not os.path.exists(ARQ_CALIBRACAO):
+        return None
+    with open(ARQ_CALIBRACAO, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def passa_filtro_elite(jogo, dezenas_quentes, dezenas_frias, ultimo_resultado):
+    calibracao = carregar_calibracao()
+
+    quentes = len(set(jogo) & set(dezenas_quentes))
+    frias = len(set(jogo) & set(dezenas_frias))
+    repetidas = len(set(jogo) & set(ultimo_resultado))
+    pares = sum(1 for n in jogo if n % 2 == 0)
+    soma = sum(jogo)
+
+    # 🔁 MODO ANTIGO (fallback)
+    if not calibracao:
+        return (
+            6 <= quentes <= 10 and
+            3 <= frias <= 6 and
+            6 <= repetidas <= 11 and
+            6 <= pares <= 9
+        )
+
+    # 🧠 MODO CALIBRADO
+    regras = {
+        "quentes": quentes,
+        "frias": frias,
+        "repetidas": repetidas,
+        "pares": pares,
+        "soma": soma
+    }
+
+    for chave, valor in regras.items():
+        cfg = calibracao.get(chave)
+        if not cfg:
+            continue
+        if valor < cfg["min"] or valor > cfg["max"]:
+            return False
+
+    return True
+
+>>> FILE: .\src\engine\filtro_identidade.py
+"""
+🧠 FILTRO DE IDENTIDADE HISTÓRICA
+Bloqueia repetição exata e penaliza similaridade extrema.
+"""
+
+def validar_jogo_historico(jogo, historico_resultados):
+    """
+    Retorna:
+    - valido (bool)
+    - penalidade (int)
+    """
+
+    jogo_set = set(jogo)
+    max_repeticao = 0
+
+    for dezenas in historico_resultados:
+        dezenas_set = set(dezenas)
+
+        if jogo_set == dezenas_set:
+            return False, -9999  # bloqueio total
+
+        repetidas = len(jogo_set & dezenas_set)
+        if repetidas > max_repeticao:
+            max_repeticao = repetidas
+
+    # Penalização progressiva
+    if max_repeticao >= 15:
+        return False, -9999
+    elif max_repeticao == 14:
+        return True, -20
+    elif max_repeticao == 13:
+        return True, -10
+    elif max_repeticao == 12:
+        return True, -4
+    else:
+        return True, 0
+
+>>> FILE: .\src\engine\gerador_final.py
+# ==========================================================
+# 🎯 GERADOR FINAL DE JOGOS — MODO PRODUÇÃO
+# ==========================================================
+
+import random
+
+from src.engine.aprendiz import obter_perfil_vencedor
+from src.db.memoria_sqlite import carregar_frequencia_dezenas
+from src.engine.filtro_elite import passa_filtro_elite
+from src.engine.score_elite import calcular_score_elite
+
+# ----------------------------------------------------------
+# CONFIGURAÇÕES
+# ----------------------------------------------------------
+
+UNIVERSO = list(range(1, 26))
+
+TOTAL_JOGOS_15 = 10
+TOTAL_JOGOS_18 = 7
+TENTATIVAS_MAX = 500
+
+# ----------------------------------------------------------
+# GERADOR BASE (ROBUSTO)
+# ----------------------------------------------------------
+
+def gerar_jogo_custom(tamanho):
+    perfil = obter_perfil_vencedor()
+    freq = carregar_frequencia_dezenas()
+
+    jogo = set()
+
+    # 🔹 Perfil vencedor (até 40%)
+    if perfil:
+        qtd = min(int(tamanho * 0.4), len(perfil))
+        jogo.update(random.sample(perfil, qtd))
+
+    # 🔹 Frequência histórica
+    if freq:
+        ordenadas = sorted(freq.items(), key=lambda x: x[1], reverse=True)
+        frequentes = [int(n) for n, _ in ordenadas]
+
+        restantes = tamanho - len(jogo)
+        if restantes > 0:
+            jogo.update(random.sample(frequentes, min(restantes, len(frequentes))))
+
+    # 🔹 Aleatório controlado
+    restantes = tamanho - len(jogo)
+    if restantes > 0:
+        pool = list(set(UNIVERSO) - jogo)
+        jogo.update(random.sample(pool, restantes))
+
+    return sorted(jogo)
+
+# ----------------------------------------------------------
+# GERADOR FINAL + FILTRO ELITE
+# ----------------------------------------------------------
+
+def gerar_jogos_finais(dezenas_quentes, dezenas_frias, ultimo_resultado):
+    """
+    Gera jogos finais filtrados e ranqueados
+    """
+
+    jogos_15 = []
+    jogos_18 = []
+
+    perfil = obter_perfil_vencedor()
+
+    # ===============================
+    # 🎯 JOGOS DE 15 DEZENAS
+    # ===============================
+    candidatos_15 = []
+    tentativas = 0
+
+    while len(candidatos_15) < 50 and tentativas < TENTATIVAS_MAX:
+        jogo = gerar_jogo_custom(15)
+
+        if passa_filtro_elite(jogo, dezenas_quentes, dezenas_frias, ultimo_resultado):
+            score = calcular_score_elite(
+                jogo,
+                dezenas_quentes,
+                dezenas_frias,
+                ultimo_resultado,
+                perfil
+            )
+            candidatos_15.append((score, jogo))
+
+        tentativas += 1
+
+    candidatos_15.sort(reverse=True)
+    jogos_15 = [j for _, j in candidatos_15[:TOTAL_JOGOS_15]]
+
+    # ===============================
+    # 🎯 JOGOS DE 18 DEZENAS
+    # ===============================
+    candidatos_18 = []
+    tentativas = 0
+
+    while len(candidatos_18) < 40 and tentativas < TENTATIVAS_MAX:
+        jogo = gerar_jogo_custom(18)
+
+        if passa_filtro_elite(jogo, dezenas_quentes, dezenas_frias, ultimo_resultado):
+            score = calcular_score_elite(
+                jogo,
+                dezenas_quentes,
+                dezenas_frias,
+                ultimo_resultado,
+                perfil
+            )
+            candidatos_18.append((score, jogo))
+
+        tentativas += 1
+
+    candidatos_18.sort(reverse=True)
+    jogos_18 = [j for _, j in candidatos_18[:TOTAL_JOGOS_18]]
+
+    return jogos_15, jogos_18
+
+>>> FILE: .\src\engine\gerador_inteligente.py
+import json
+import random
+
+ARQUIVO_PERFIL = "src/memory/perfil_vencedor.json"
+
+def gerar_jogo_inteligente():
+    with open(ARQUIVO_PERFIL, "r", encoding="utf-8") as f:
+        perfil = json.load(f)
+
+    freq = perfil["frequencia_dezenas"]
+    dezenas = list(range(1, 26))
+
+    pesos = [freq.get(str(d), 1) for d in dezenas]
+
+    jogo = random.choices(dezenas, weights=pesos, k=15)
+    return sorted(set(jogo))[:15]
+
+>>> FILE: .\src\engine\gerador_jogos.py
+"""
+🧠 GERADOR CENTRAL DE JOGOS — IA SELETIVA
+Geração extrema baseada em aprendizado + memória + anti-caos.
+"""
+
+import random
+from typing import List
+
+from src.engine.seletor_extremo import selecionar_top_jogos
+from src.engine.estatisticas import calcular_dezenas_quentes_frias
+from src.engine.motor_multicerebro import obter_total_dezenas_atual
+from src.engine.aprendiz import obter_perfil_vencedor
+from src.utils.dados import carregar_resultados
+from src.utils.logger import logger
+
+# ==================================================
+# ⚙️ CONFIGURAÇÃO GLOBAL
+# ==================================================
+TOTAL_GERADOS = 500
+TOP_15 = 10
+TOP_18 = 7
+
+DEZENAS_TOTAIS = list(range(1, 26))
+
+# ==================================================
+# 🎯 GERADOR BASE (ANTI-CAOS)
+# ==================================================
+def gerar_jogo_base(
+    tamanho: int,
+    dezenas_quentes: List[int],
+    dezenas_frias: List[int],
+    ultimo_resultado: List[int]
+) -> List[int]:
+
+    jogo = set()
+
+    # 🔥 Quentes dominam, mas não totalizam
+    alvo_quentes = int(tamanho * 0.45)
+    while len(jogo) < alvo_quentes:
+        jogo.add(random.choice(dezenas_quentes))
+
+    # ♻️ Repetição leve do último concurso
+    repetidas = random.sample(
+        ultimo_resultado,
+        k=min(4, len(ultimo_resultado))
+    )
+    jogo.update(repetidas)
+
+    # ❄️ Frias entram pouco
+    if random.random() < 0.2:
+        jogo.add(random.choice(dezenas_frias))
+
+    # 🎲 Completa com diversidade
+    while len(jogo) < tamanho:
+        jogo.add(random.choice(DEZENAS_TOTAIS))
+
+    return sorted(jogo)
+
+# ==================================================
+# 🚀 SUPERGERAÇÃO CONTROLADA
+# ==================================================
+def supergerar_jogos(
+    tamanho: int,
+    total: int
+) -> List[List[int]]:
+
+    dezenas_quentes, dezenas_frias = calcular_dezenas_quentes_frias()
+    resultados = carregar_resultados()
+    ultimo_resultado = resultados[-1]["dezenas"]
+
+    jogos = set()
+
+    logger.info(f"🧠 Supergeração iniciada | {total} jogos ({tamanho} dezenas)")
+
+    tentativas = 0
+    while len(jogos) < total and tentativas < total * 5:
+        jogo = tuple(
+            gerar_jogo_base(
+                tamanho,
+                dezenas_quentes,
+                dezenas_frias,
+                ultimo_resultado
+            )
+        )
+        jogos.add(jogo)
+        tentativas += 1
+
+        if len(jogos) % 100 == 0:
+            logger.debug(f"🧠 Supergeração: {len(jogos)}/{total}")
+
+    return [list(j) for j in jogos]
+
+# ==================================================
+# 🧠 GERADOR FINAL INTELIGENTE
+# ==================================================
+def gerar_jogos_inteligentes():
+
+    print("\n🧠 GERANDO JOGOS COM IA SELETIVA — NÍVEL EXTREMO\n")
+
+    perfil = obter_perfil_vencedor()
+    if not perfil:
+        print("❌ Nenhum aprendizado encontrado. Execute o treinamento.")
+        return
+
+    dezenas_motor = obter_total_dezenas_atual()
+    logger.info(f"🧠 Motor ativo com {dezenas_motor} dezenas")
+
+    # ===============================
+    # 🎯 JOGOS 15
+    # ===============================
+    jogos_15_brutos = supergerar_jogos(15, TOTAL_GERADOS)
+
+    jogos_15_finais = selecionar_top_jogos(
+        jogos_15_brutos,
+        top_n=TOP_15,
+        timeout_segundos=8
+    )
+
+    # ===============================
+    # 🎯 JOGOS 18
+    # ===============================
+    jogos_18_brutos = supergerar_jogos(18, TOTAL_GERADOS)
+
+    jogos_18_finais = selecionar_top_jogos(
+        jogos_18_brutos,
+        top_n=TOP_18,
+        timeout_segundos=8
+    )
+
+    # ===============================
+    # 📊 SAÍDA
+    # ===============================
+    print("=" * 60)
+    print("🎯 TOP JOGOS — 15 DEZENAS\n")
+
+    for i, jogo in enumerate(jogos_15_finais, 1):
+        print(f"Jogo {i:02d}: {jogo}")
+
+    print("\n" + "=" * 60)
+    print("🎯 TOP JOGOS — 18 DEZENAS\n")
+
+    for i, jogo in enumerate(jogos_18_finais, 1):
+        print(f"Jogo {i:02d}: {jogo}")
+
+    print("\n✅ Jogos escolhidos por IA seletiva (anti-caos real)\n")
+
+# ==================================================
+# ▶️ EXECUÇÃO
+# ==================================================
+if __name__ == "__main__":
+    gerar_jogos_inteligentes()
+
+>>> FILE: .\src\engine\memoria.py
+import sqlite3
+from pathlib import Path
+
+DB_PATH = Path("data/lotofacil.db")
+
+def inicializar_memoria():
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS memoria_premiada (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            concurso_previsto INTEGER,
+            pontos INTEGER,
+            jogo TEXT
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+def salvar_jogo_premiado(concurso_previsto, jogo, pontos):
+    if pontos < 11:
+        return  # REGRA DE OURO
+
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO memoria_premiada (concurso_previsto, pontos, jogo)
+        VALUES (?, ?, ?)
+    """, (
+        concurso_previsto,
+        pontos,
+        ",".join(map(str, jogo))
+    ))
+
+    conn.commit()
+    conn.close()
+
+def listar_melhores(min_pontos=11):
+    inicializar_memoria()  # 🔥 GARANTE QUE A TABELA EXISTE
+
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT concurso_previsto, pontos, jogo
+        FROM memoria_premiada
+        WHERE pontos >= ?
+        ORDER BY pontos DESC
+    """, (min_pontos,))
+
+    resultados = cur.fetchall()
+    conn.close()
+
+    return resultados
+
+>>> FILE: .\src\engine\metrics.py
+def exibir_resumo(concurso, pontos, score):
+    print(f"🎯 Resultado concurso {concurso}")
+    print(f"   ➜ Pontos: {pontos}")
+    print(f"   ➜ Score : {round(score, 2)}")
+
+>>> FILE: .\src\engine\motor_multicerebro.py
+import random
+from src.db.memoria_sqlite import carregar_frequencia_dezenas
+from src.engine.aprendiz import obter_perfil_vencedor
+from src.engine.extrator_nucleo import extrair_nucleo_global, gerar_base_18_nucleo
+from src.engine.cerebro_neural import avaliar_base
+from src.engine.fechamento_automatico import gerar_fechamento
+
+# ==================================
+# 🎛️ CONFIGURAÇÃO DE TREINAMENTO
+# ==================================
+
+# Modo automático: escolhe aleatoriamente a quantidade de dezenas
+MODO_TOTAL_DEZENAS_AUTOMATICO = True # ATIVAR MODO AUTOMATICO
+#MODO_TOTAL_DEZENAS_AUTOMATICO = False # DESATIVAR MOVO AUTOMATICO
+
+# Se automático estiver desligado, usa este valor fixo
+TOTAL_DEZENAS_FIXO = 18
+
+# TOTAL DE DEZENAS ATUAL (dinâmico)
+TOTAL_DEZENAS = TOTAL_DEZENAS_FIXO
+
+# Intervalo permitido quando automático
+#INTERVALO_DEZENAS = [15, 16, 17, 18, 19, 20]
+INTERVALO_DEZENAS = [16, 17, 18, 19, 20]
+
+UNIVERSO = list(range(1, 26))
+
+MAX_PERFIL = 6
+MIN_NUCLEO = 4
+MAX_FREQ_DOMINANCIA = 10
+
+def resolver_total_dezenas():
+    """
+    Decide quantas dezenas o motor vai usar neste ciclo.
+    Não afeta fechamento nem geração final.
+    """
+    if MODO_TOTAL_DEZENAS_AUTOMATICO:
+        return random.choice(INTERVALO_DEZENAS)
+    return TOTAL_DEZENAS_FIXO
+
+def gerar_jogo():
+    global TOTAL_DEZENAS
+    TOTAL_DEZENAS = resolver_total_dezenas()
+
+    perfil = obter_perfil_vencedor() or []
+    freq_dict = carregar_frequencia_dezenas() or {}
+    nucleo_data = extrair_nucleo_global()
+
+    nucleo = nucleo_data.get("nucleo", [])
+    satelites = nucleo_data.get("satelites", [])
+
+    jogo = set()
+
+    # ===============================
+    # 1️⃣ NÚCLEO GLOBAL
+    # ===============================
+    if nucleo:
+        jogo.update(random.sample(nucleo, min(4, len(nucleo))))
+
+    # ===============================
+    # 2️⃣ PERFIL VENCEDOR
+    # ===============================
+    perfil_filtrado = list(set(perfil) - jogo)
+    if perfil_filtrado:
+        jogo.update(random.sample(perfil_filtrado, min(MAX_PERFIL, len(perfil_filtrado))))
+
+    # ===============================
+    # 3️⃣ SATÉLITES
+    # ===============================
+    restantes = TOTAL_DEZENAS - len(jogo)
+    if restantes > 0 and satelites:
+        pool = list(set(satelites) - jogo)
+        jogo.update(random.sample(pool, min(restantes, len(pool))))
+
+    # ===============================
+    # 4️⃣ FREQUÊNCIA HISTÓRICA
+    # ===============================
+    if freq_dict:
+        ordenadas = sorted(freq_dict.items(), key=lambda x: x[1], reverse=True)
+        top_freq = [int(d) for d, _ in ordenadas[:MAX_FREQ_DOMINANCIA]]
+
+        restantes = TOTAL_DEZENAS - len(jogo)
+        pool = list(set(top_freq) - jogo)
+        if restantes > 0 and pool:
+            jogo.update(random.sample(pool, min(restantes, len(pool))))
+
+    # ===============================
+    # 5️⃣ ALEATORIEDADE FINAL
+    # ===============================
+    restantes = TOTAL_DEZENAS - len(jogo)
+    if restantes > 0:
+        pool = list(set(UNIVERSO) - jogo)
+        jogo.update(random.sample(pool, restantes))
+
+    return sorted(jogo)
+
+# ==================================
+# 🎛️ PARÂMETROS
+# ==================================
+TAMANHO_JOGO_FINAL = 15
+
+def gerar_jogo_inteligente():
+    # 1️⃣ GERAR BASE 18
+    base = gerar_base_18_nucleo()
+
+    # 2️⃣ CONSULTAR CÉREBRO NEURAL (consultivo)
+    avaliacao = avaliar_base(base)
+
+    if not avaliacao.get("aprovado", True):
+        base = gerar_base_18_nucleo()
+
+    # 3️⃣ GERAR FECHAMENTO
+    jogos = gerar_fechamento(base, TAMANHO_JOGO_FINAL)
+
+    return {
+        "base_18": base,
+        "avaliacao": avaliacao,
+        "jogos": jogos
+    }
+
+def obter_total_dezenas_atual():
+    """
+    Retorna quantas dezenas o motor usou no último ciclo.
+    """
+    return TOTAL_DEZENAS
+
+>>> FILE: .\src\engine\nn_cerebro.py
+# src/engine/nn_cerebro.py
+
+import joblib
+import numpy as np
+
+class CerebroNeural:
+
+    def __init__(self, modelo_path="data/modelo_nn.pkl"):
+        self.modelo = joblib.load(modelo_path)
+
+    def avaliar_jogo(self, features: dict) -> float:
+        ordem = [
+            "soma", "pares", "impares", "repeticao_anterior",
+            "perc_perfil", "freq_media", "dispersao", "entropia"
+        ]
+
+        vetor = np.array([[features[k] for k in ordem]])
+        score = self.modelo.predict_proba(vetor)[0][1]
+        return round(float(score), 4)
+
+>>> FILE: .\src\engine\scorer.py
+from src.engine.brains.brain_patterns import score_padroes
+from src.engine.brains.brain_diversity import diversidade
+
+def score_total(base, outras, pontos_reais, score_heuristico):
+    score = 0
+    score += pontos_reais * 10
+    score += score_heuristico * 2
+    score += score_padroes(base)
+    score += diversidade(base, outras)
+    return score
+
+>>> FILE: .\src\engine\score_1415.py
+"""
+🔥 SCORE 14–15 REAL
+Score matemático focado em padrões vencedores reais.
+"""
+
+from collections import Counter
+from src.engine.filtro_identidade import validar_jogo_historico
+
+def calcular_score_1415(
+    jogo,
+    memoria_1415,            # lista de jogos [[...], [...]]
+    dezenas_quentes,
+    dezenas_frias,
+    historico_resultados
+):
+    # ---------------------------
+    # PROTEÇÕES
+    # ---------------------------
+    if not isinstance(jogo, (list, tuple)) or len(jogo) != 15:
+        return -9999
+
+    score = 0.0
+
+    # ----------------------------------
+    # 1️⃣ FILTRO HISTÓRICO (ANTI-CLONE)
+    # ----------------------------------
+    valido, penal_hist = validar_jogo_historico(jogo, historico_resultados)
+    if not valido:
+        return -9999
+
+    score += penal_hist
+
+    # ----------------------------------
+    # 2️⃣ FREQUÊNCIA HISTÓRICA REAL
+    # ----------------------------------
+    freq = Counter()
+    for j in memoria_1415:
+        freq.update(j)
+
+    score_freq = sum(freq.get(d, 0) for d in jogo)
+    score += score_freq * 0.004  # ⚠️ PESO REDUZIDO (antes estava matando tudo)
+
+    # ----------------------------------
+    # 3️⃣ DEZENAS QUENTES / FRIAS
+    # ----------------------------------
+    quentes = len(set(jogo) & set(dezenas_quentes))
+    frias = len(set(jogo) & set(dezenas_frias))
+
+    score += quentes * 2.0
+    score -= frias * 1.0
+
+    # ----------------------------------
+    # 4️⃣ PAR / ÍMPAR (ideal 7/8)
+    # ----------------------------------
+    pares = sum(1 for d in jogo if d % 2 == 0)
+    impares = 15 - pares
+    score += max(0, 10 - abs(pares - impares) * 1.5)
+
+    # ----------------------------------
+    # 5️⃣ SEQUÊNCIAS LONGAS (PENALIZA)
+    # ----------------------------------
+    ordenado = sorted(jogo)
+    seq = sum(
+        1 for i in range(len(ordenado) - 1)
+        if ordenado[i] + 1 == ordenado[i + 1]
+    )
+
+    score -= seq * 1.2  # ⚠️ suavizado
+
+    return round(score, 3)
+
+>>> FILE: .\src\engine\score_elite.py
+from collections import Counter
+
+def calcular_score_elite(
+    jogo,
+    dezenas_quentes,
+    dezenas_frias,
+    ultimo_resultado,
+    perfil_vencedor
+):
+    score = 0
+
+    jogo = set(jogo)
+    ultimo = set(ultimo_resultado or [])
+    perfil = set(perfil_vencedor or [])
+
+    # ==================================================
+    # 🔥 1️⃣ NÚCLEO REPETIDO (MUITO IMPORTANTE)
+    # ==================================================
+    intersecao_ultimo = len(jogo & ultimo)
+
+    if 8 <= intersecao_ultimo <= 10:
+        score += 30
+    elif 6 <= intersecao_ultimo <= 11:
+        score += 15
+    else:
+        score -= 10
+
+    # ==================================================
+    # 🔥 2️⃣ PERFIL VENCEDOR HISTÓRICO
+    # ==================================================
+    score += len(jogo & perfil) * 3
+
+    # ==================================================
+    # 🔥 3️⃣ DEZENAS QUENTES
+    # ==================================================
+    quentes = len(jogo & set(dezenas_quentes))
+    score += quentes * 2.5
+
+    # ==================================================
+    # ⚖️ 4️⃣ DEZENAS FRIAS (CONTROLE FINO)
+    # ==================================================
+    frias = len(jogo & set(dezenas_frias))
+
+    if frias <= 2:
+        score += 8
+    elif frias <= 4:
+        score += 2
+    else:
+        score -= 15
+
+    # ==================================================
+    # ⚖️ 5️⃣ PARES / ÍMPARES
+    # ==================================================
+    pares = len([n for n in jogo if n % 2 == 0])
+
+    if 7 <= pares <= 8:
+        score += 6
+    elif 6 <= pares <= 9:
+        score += 3
+    else:
+        score -= 5
+
+    # ==================================================
+    # ❌ 6️⃣ SEQUÊNCIAS LONGAS
+    # ==================================================
+    seq = 0
+    max_seq = 0
+    for n in sorted(jogo):
+        if n - 1 in jogo:
+            seq += 1
+            max_seq = max(max_seq, seq)
+        else:
+            seq = 0
+
+    if max_seq >= 4:
+        score -= max_seq * 3
+
+    return round(score, 2)
+
+>>> FILE: .\src\engine\score_multicerebro.py
+# src/engine/score_multicerebro.py
+
+class ScoreMultiCerebro:
+    """
+    🧠 Motor de score multicritério
+    Projetado para maximizar chance real de 14/15
+    """
+
+    def __init__(self, memoria):
+        self.memoria = memoria
+        self.freq = memoria.frequencia_dezenas()
+
+    def score_final(self, jogo):
+        detalhes = {}
+
+        # 1️⃣ Frequência histórica ponderada
+        score_freq = sum(self.freq.get(d, 0) for d in jogo)
+        detalhes["frequencia"] = score_freq
+
+        # 2️⃣ Paridade (ideal 7/8)
+        pares = sum(1 for d in jogo if d % 2 == 0)
+        impares = len(jogo) - pares
+        score_paridade = 10 - abs(pares - impares)
+        detalhes["paridade"] = score_paridade
+
+        # 3️⃣ Distribuição por regiões
+        faixas = [
+            sum(1 for d in jogo if 1 <= d <= 5),
+            sum(1 for d in jogo if 6 <= d <= 10),
+            sum(1 for d in jogo if 11 <= d <= 15),
+            sum(1 for d in jogo if 16 <= d <= 25),
+        ]
+        score_regiao = 10 - (max(faixas) - min(faixas))
+        detalhes["regioes"] = score_regiao
+
+        # 4️⃣ Sequências longas (repulsão)
+        ordenado = sorted(jogo)
+        seq = sum(
+            1 for i in range(len(ordenado) - 1)
+            if ordenado[i] + 1 == ordenado[i + 1]
+        )
+        score_seq = max(0, 10 - seq)
+        detalhes["sequencias"] = score_seq
+
+        # 🔥 SCORE FINAL REAL
+        score_total = (
+            score_freq * 0.35 +
+            score_paridade * 1.6 +
+            score_regiao * 1.4 +
+            score_seq * 1.5
+        )
+
+        return score_total, detalhes
+
+>>> FILE: .\src\engine\seletor_extremo.py
+"""
+🔥 SELETOR EXTREMO — IA ANTI-CAOS
+Seleciona apenas os jogos mais alinhados com 14/15 reais.
+"""
+
+from time import time
+from typing import List, Tuple
+
+from src.engine.score_1415 import calcular_score_1415
+from src.engine.cerebros_memoria import obter_cerebros_memoria
+from src.engine.estatisticas import calcular_dezenas_quentes_frias
+from src.utils.dados import carregar_resultados
+from src.utils.logger import logger
+
+from collections import Counter
+from time import time
+
+class SeletorExtremo:
+
+    def __init__(self, top_n=10, score_minimo=-999, timeout_segundos=10):
+        self.top_n = top_n
+        self.score_minimo = score_minimo
+        self.timeout_segundos = timeout_segundos
+
+        # 🧠 Memória principal (14/15 reais)
+        self.cerebros = obter_cerebros_memoria()
+        self.memoria_1415 = self.cerebros.memoria  # lista de jogos históricos
+
+        # 📊 Frequência GLOBAL (calculada UMA ÚNICA VEZ)
+        logger.info("🧮 Calculando frequência global das dezenas (cache)")
+
+        self.freq_global = Counter()
+        inicio = time()
+
+        for idx, jogo in enumerate(self.memoria_1415, 1):
+            self.freq_global.update(jogo)
+
+            if idx % 5000 == 0:
+                logger.info(
+                    f"🧮 Frequência | Processados {idx}/{len(self.memoria_1415)} "
+                    f"| Tempo: {round(time() - inicio, 2)}s"
+                )
+
+        # 🔥 Dezenas quentes e frias
+        self.dezenas_quentes, self.dezenas_frias = calcular_dezenas_quentes_frias()
+
+        # 🕰️ Histórico recente (anti-clone / similaridade)
+        resultados = carregar_resultados()
+        self.historico = [r["dezenas"] for r in resultados[-300:]]
+
+        logger.info(
+            f"🧠 Seletor extremo pronto | "
+            f"Memória: {len(self.memoria_1415)} jogos | "
+            f"Histórico recente: {len(self.historico)}"
+        )
+
+    def selecionar(self, jogos: List[List[int]]) -> List[Tuple[List[int], float]]:
+        inicio = time()
+        avaliados = []
+
+        logger.info(f"🧠 Seletor extremo iniciado | Jogos recebidos: {len(jogos)}")
+
+        for idx, jogo in enumerate(jogos, 1):
+            if time() - inicio > self.timeout_segundos:
+                logger.warning("⏱️ Timeout atingido no seletor extremo")
+                break
+
+            score = calcular_score_1415(
+                jogo=jogo,
+                memoria_1415=self.memoria_1415,
+                dezenas_quentes=self.dezenas_quentes,
+                dezenas_frias=self.dezenas_frias,
+                historico_resultados=self.historico
+            )
+
+            if score >= self.score_minimo:
+                avaliados.append((jogo, score))
+
+            if idx % 1 == 0:
+                logger.info(f"⏳ Avaliados {idx}/{len(jogos)} | Aprovados {len(avaliados)}")
+
+        avaliados.sort(key=lambda x: x[1], reverse=True)
+        return avaliados[: self.top_n]
+
+def selecionar_top_jogos(jogos, top_n=10, score_minimo=-999, timeout_segundos=10):
+    seletor = SeletorExtremo(top_n, score_minimo, timeout_segundos)
+    resultado = seletor.selecionar(jogos)
+    return [j for j, _ in resultado]
+
+>>> FILE: .\src\engine\seletor_jogos.py
+# src/engine/seletor_jogos.py
+
+from src.engine.motor_multicerebro import gerar_jogo
+from src.engine.nn_cerebro import CerebroNeural
+from src.utils.extrator_features import extrair_features
+import random
+
+class SeletorJogos:
+
+    def __init__(self, usar_nn=True):
+        self.usar_nn = usar_nn
+        self.nn = CerebroNeural() if usar_nn else None
+
+    def gerar_jogos_filtrados(self, total_gerados=30, total_selecionados=10):
+        jogos = [gerar_jogo() for _ in range(total_gerados)]
+
+        if not self.usar_nn:
+            random.shuffle(jogos)
+            return jogos[:total_selecionados]
+
+        avaliados = []
+        for jogo in jogos:
+            features = extrair_features(jogo)
+            score = self.nn.avaliar_jogo(features)
+            avaliados.append((jogo, score))
+
+        avaliados.sort(key=lambda x: x[1], reverse=True)
+
+        # mantém diversidade (não pega só o topo)
+        melhores = avaliados[:total_selecionados * 2]
+        random.shuffle(melhores)
+
+        return [j[0] for j in melhores[:total_selecionados]]
+
+>>> FILE: .\src\engine\trainer copy.py
+from collections import Counter
+
+from src.engine.motor_multicerebro import gerar_jogo, obter_total_dezenas_atual
+from src.engine.aprendiz import gerar_perfil_vencedor
+from src.engine.avaliador import Avaliador
+from src.engine.estatisticas import calcular_dezenas_quentes_frias
+from src.engine.gerador_final import gerar_jogos_finais
+from src.engine.calibrador_pesos import calibrar_pesos
+
+from src.db.memoria_sqlite import (
+    salvar_jogo_premiado,
+    carregar_jogos_premiados
+)
+
+from src.utils.comparador import contar_acertos
+from src.utils.dados import carregar_resultados
+from src.reports.relatorio_txt import salvar_relatorio
+
+# ===============================
+# ⚙️ CONFIGURAÇÃO DE APRENDIZADO
+# ===============================
+
+APRENDIZADO_MULTIPLO = True
+
+CONFIG_JOGOS_TREINO = {
+    16: 5,   # 5 jogos de 16 dezenas
+    18: 3,   # 3 jogos de 18 dezenas
+    20: 2    # 2 jogos de 20 dezenas
+}
+
+MODO_FOCO_1415 = True
+
+def treinar_sequencial():
+    print("🧠 Treinamento sequencial iniciado")
+
+    # ===============================
+    # 📥 CARREGA RESULTADOS OFICIAIS
+    # ===============================
+    resultados = carregar_resultados()
+
+    # Garantir ordem cronológica (antigo → novo)
+    resultados = sorted(resultados, key=lambda x: x["concurso"])
+
+    avaliador = Avaliador()
+    contador_dezenas = {}
+
+    # ===============================
+    # 📊 HISTÓRICO GLOBAL
+    # ===============================
+    historico_dezenas = []
+
+    for i in range(len(resultados) - 1):
+        concurso_atual = resultados[i]["concurso"]
+        dezenas_atual = resultados[i]["dezenas"]
+        dezenas_reais = resultados[i + 1]["dezenas"]
+
+        historico_dezenas.append(dezenas_atual)
+
+        # ===============================
+        # 🎓 APRENDIZADO
+        # ===============================
+        if APRENDIZADO_MULTIPLO:
+            for tamanho, quantidade in CONFIG_JOGOS_TREINO.items():
+                for _ in range(quantidade):  
+                    jogo = gerar_jogo()
+
+                    pontos = contar_acertos(jogo, dezenas_reais)
+                    avaliador.registrar(pontos)
+
+                    total_dezenas_usadas = len(jogo)
+                    contador_dezenas[total_dezenas_usadas] = (
+                        contador_dezenas.get(total_dezenas_usadas, 0) + 1
+                    )
+
+                    print(
+                        f"📘 Concurso {concurso_atual} → previsão {concurso_atual + 1} | Pontos: {pontos}"
+                    )
+
+                    if pontos >= 11:
+                        print("💰 JOGO PREMIADO! Salvando na memória")
+                        salvar_jogo_premiado(concurso_atual, jogo, pontos)
+
+        else:
+            jogo = gerar_jogo()
+            pontos = contar_acertos(jogo, dezenas_reais)
+            avaliador.registrar(pontos)
+
+            total_dezenas_usadas = len(jogo)
+            contador_dezenas[total_dezenas_usadas] = (
+                contador_dezenas.get(total_dezenas_usadas, 0) + 1
+            )
+
+        print(
+            f"📘 Concurso {concurso_atual} → previsão {concurso_atual + 1} | Pontos: {pontos}"
+        )
+
+        if pontos >= 11:
+            print("💰 JOGO PREMIADO! Salvando na memória")
+            salvar_jogo_premiado(concurso_atual, jogo, pontos)
+
+        # 📊 Controle de tamanho dos jogos
+        total_dezenas_usadas = obter_total_dezenas_atual()
+        contador_dezenas[total_dezenas_usadas] = (
+            contador_dezenas.get(total_dezenas_usadas, 0) + 1
+        )
+
+        print(
+            f"📘 Concurso {concurso_atual} → previsão {concurso_atual + 1} | Pontos: {pontos}"
+        )
+
+        # 💰 Salva memória premiada (>=11)
+        if pontos >= 11:
+            print("💰 JOGO PREMIADO! Salvando na memória")
+            salvar_jogo_premiado(concurso_atual, jogo, pontos)
+
+    # ===============================
+    # 🧠 PERFIL VENCEDOR (como já existia)
+    # ===============================
+    gerar_perfil_vencedor()
+    avaliador.relatorio()
+
+    # ===============================
+    # 🔥 ESTATÍSTICAS REAIS DO HISTÓRICO
+    # ===============================
+    dezenas_quentes, dezenas_frias = calcular_dezenas_quentes_frias()
+
+    # Último resultado conhecido
+    ultimo_resultado = resultados[-1]["dezenas"]
+
+    # ===============================
+    # 🧠 CALIBRAÇÃO AUTOMÁTICA DE PESOS
+    # ===============================
+    jogos_1415 = carregar_jogos_premiados(min_pontos=14)
+
+    if jogos_1415:
+        pesos_calibrados = calibrar_pesos(jogos_1415)
+        print("⚙️ Pesos calibrados automaticamente:", pesos_calibrados)
+    else:
+        pesos_calibrados = None
+        print("⚠️ Ainda não há jogos 14/15 suficientes para calibração")
+
+    # ===============================
+    # 🎯 GERAÇÃO FINAL DE JOGOS
+    # ===============================
+    jogos_15, jogos_18 = gerar_jogos_finais(
+        dezenas_quentes=dezenas_quentes,
+        dezenas_frias=dezenas_frias,
+        ultimo_resultado=ultimo_resultado,
+        pesos=pesos_calibrados  # ← NOVO (opcional e seguro)
+    )
+
+    # ===============================
+    # 📄 RELATÓRIO FINAL
+    # ===============================
+    estatisticas = avaliador.resumo()
+    estatisticas["dezenas_treinamento"] = contador_dezenas
+
+    relatorio_avaliador = avaliador.relatorio_texto()
+
+    salvar_relatorio(
+        jogos_15,
+        jogos_18,
+        estatisticas,
+        relatorio_avaliador
+    )
+
+    print("✅ Treinamento finalizado com sucesso")
+
+>>> FILE: .\src\engine\trainer.py
+from collections import Counter
+
+from src.engine.motor_multicerebro import gerar_jogo
+from src.engine.aprendiz import gerar_perfil_vencedor
+from src.engine.avaliador import Avaliador
+from src.engine.estatisticas import calcular_dezenas_quentes_frias
+from src.engine.gerador_final import gerar_jogos_finais
+from src.engine.calibrador_pesos import calibrar_pesos
+
+from src.db.memoria_sqlite import (
+    salvar_jogo_premiado,
+    carregar_jogos_premiados
+)
+
+from src.utils.comparador import contar_acertos
+from src.utils.dados import carregar_resultados
+from src.reports.relatorio_txt import salvar_relatorio
+
+from src.logger import log_treinamento
+
+log_treinamento("🧠 Treinamento iniciado")
+
+# ===============================
+# ⚙️ CONFIGURAÇÃO DE APRENDIZADO
+# ===============================
+
+APRENDIZADO_MULTIPLO = True
+MODO_FOCO_1415 = True  # ← ATIVO
+
+CONFIG_JOGOS_TREINO = {
+    16: 5,
+    18: 3,
+    20: 2
+}
+
+def treinar_sequencial():
+    print("🧠 Treinamento sequencial iniciado")
+
+    resultados = carregar_resultados()
+    resultados = sorted(resultados, key=lambda x: x["concurso"])
+
+    avaliador = Avaliador()
+    contador_dezenas = Counter()
+
+    historico_dezenas = []
+
+    # 🔥 BUFFER DE APRENDIZADO FOCO 14/15
+    jogos_foco_1415 = []
+
+    for i in range(len(resultados) - 1):
+        concurso_atual = resultados[i]["concurso"]
+        dezenas_atual = resultados[i]["dezenas"]
+        dezenas_reais = resultados[i + 1]["dezenas"]
+
+        historico_dezenas.append(dezenas_atual)
+
+        # ===============================
+        # 🎓 TREINO MULTIPLO CONTROLADO
+        # ===============================
+        if APRENDIZADO_MULTIPLO:
+            for tamanho, quantidade in CONFIG_JOGOS_TREINO.items():
+                for _ in range(quantidade):
+                    jogo = gerar_jogo()
+
+                    pontos = contar_acertos(jogo, dezenas_reais)
+                    avaliador.registrar(pontos)
+
+                    contador_dezenas[len(jogo)] += 1
+
+                    # 💾 Memória geral (>=11)
+                    if pontos >= 11:
+                        salvar_jogo_premiado(concurso_atual, jogo, pontos)
+
+                    # 🔥 FOCO REAL 14/15 (aprendizado incremental)
+                    if MODO_FOCO_1415 and pontos >= 14:
+                        jogos_foco_1415.append({
+                            "concurso": concurso_atual,
+                            "jogo": jogo,
+                            "pontos": pontos
+                        })
+                        log_treinamento(
+                            f"🔥 FOCO 14/15 | Concurso {concurso_atual} | Pontos: {pontos}"
+                        )
+
+                    log_treinamento(
+                        f"Concurso {concurso_atual} | Pontos: {pontos} | Tamanho: {len(jogo)}"
+                    )
+
+        else:
+            jogo = gerar_jogo()
+            pontos = contar_acertos(jogo, dezenas_reais)
+
+            avaliador.registrar(pontos)
+            contador_dezenas[len(jogo)] += 1
+
+            if pontos >= 11:
+                salvar_jogo_premiado(concurso_atual, jogo, pontos)
+
+        print(
+            f"📘 Concurso {concurso_atual} → previsão {concurso_atual + 1} | Últimos pontos: {pontos}"
+        )
+
+    # ===============================
+    # 🔥 CONSOLIDA APRENDIZADO 14/15
+    # ===============================
+    if jogos_foco_1415:
+        for item in jogos_foco_1415:
+            salvar_jogo_premiado(
+                item["concurso"],
+                item["jogo"],
+                item["pontos"]
+            )
+
+        log_treinamento(
+            f"🔥 Total de jogos 14/15 aprendidos: {len(jogos_foco_1415)}"
+        )
+
+    # ===============================
+    # 🧠 PERFIL VENCEDOR
+    # ===============================
+    gerar_perfil_vencedor()
+    avaliador.relatorio()
+
+    # ===============================
+    # 🔥 ESTATÍSTICAS REAIS
+    # ===============================
+    dezenas_quentes, dezenas_frias = calcular_dezenas_quentes_frias()
+    ultimo_resultado = resultados[-1]["dezenas"]
+
+    # ===============================
+    # ⚙️ CALIBRAÇÃO DE PESOS
+    # ===============================
+    jogos_1415 = carregar_jogos_premiados(min_pontos=14)
+
+    if jogos_1415:
+        pesos_calibrados = calibrar_pesos(jogos_1415)
+        print("⚙️ Pesos calibrados:", pesos_calibrados)
+        log_treinamento("⚙️ Pesos calibrados com jogos 14/15")
+    else:
+        pesos_calibrados = None
+        print("⚠️ Sem jogos 14/15 suficientes")
+        log_treinamento("⚠️ Sem jogos 14/15 para calibração")
+
+    # ===============================
+    # 🎯 GERAÇÃO FINAL
+    # ===============================
+    jogos_15, jogos_18 = gerar_jogos_finais(
+        dezenas_quentes=dezenas_quentes,
+        dezenas_frias=dezenas_frias,
+        ultimo_resultado=ultimo_resultado,
+        pesos=pesos_calibrados
+    )
+
+    # ===============================
+    # 📄 RELATÓRIO
+    # ===============================
+    estatisticas = avaliador.resumo()
+    estatisticas["dezenas_treinamento"] = dict(contador_dezenas)
+
+    relatorio_avaliador = avaliador.relatorio_texto()
+
+    salvar_relatorio(
+        jogos_15,
+        jogos_18,
+        estatisticas,
+        relatorio_avaliador
+    )
+
+    print("✅ Treinamento finalizado com sucesso")
+
+>>> FILE: .\src\engine\trainer_GITHUB.py
+# ==========================================================
+# 🧠 TREINAMENTO IA LOTOFÁCIL — CHECKPOINT GIT ORGANIZADO
+# ==========================================================
+
+import subprocess
+from datetime import datetime
+from collections import Counter
+
+from src.engine.motor_multicerebro import gerar_jogo
+from src.engine.aprendiz import gerar_perfil_vencedor
+from src.engine.avaliador import Avaliador
+from src.engine.estatisticas import calcular_dezenas_quentes_frias
+from src.engine.gerador_final import gerar_jogos_finais
+from src.engine.calibrador_pesos import calibrar_pesos
+
+from src.db.memoria_sqlite import (
+    salvar_jogo_premiado,
+    carregar_jogos_premiados
+)
+
+from src.utils.comparador import contar_acertos
+from src.utils.dados import carregar_resultados
+from src.reports.relatorio_txt import salvar_relatorio
+from src.logger import log_treinamento
+
+# ==========================================================
+# 🔔 LOG INICIAL
+# ==========================================================
+
+log_treinamento("🧠 Treinamento iniciado")
+
+# ==========================================================
+# ⚙️ CONFIGURAÇÃO DE APRENDIZADO
+# ==========================================================
+
+APRENDIZADO_MULTIPLO = True
+MODO_FOCO_1415 = True
+
+CONFIG_JOGOS_TREINO = {
+    16: 5,
+    18: 3,
+    20: 2
+}
+
+# ==========================================================
+# 📤 CHECKPOINT GIT (SAÍDA CONTROLADA)
+# ==========================================================
+
+def git_checkpoint(concurso_atual):
+    try:
+        subprocess.run(
+            ["git", "config", "--global", "user.name", "github-actions[bot]"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        subprocess.run(
+            ["git", "config", "--global", "user.email", "github-actions[bot]@users.noreply.github.com"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+
+        subprocess.run(
+            ["git", "add", "."],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+
+        diff = subprocess.run(
+            ["git", "diff", "--cached", "--quiet"]
+        )
+
+        if diff.returncode != 0:
+            mensagem_commit = (
+                f"🧠 Checkpoint automático | Concurso {concurso_atual} | "
+                f"{datetime.now():%Y-%m-%d %H:%M:%S}"
+            )
+
+            commit = subprocess.run(
+                ["git", "commit", "-m", mensagem_commit],
+                capture_output=True,
+                text=True
+            )
+
+            push = subprocess.run(
+                ["git", "push"],
+                capture_output=True,
+                text=True
+            )
+
+            # ===============================
+            # 📤 SAÍDA ORGANIZADA
+            # ===============================
+            print("\n" + "=" * 50)
+            print("📤 COMMIT REALIZADO NO GITHUB")
+            print(mensagem_commit)
+            print("=" * 50 + "\n")
+
+            log_treinamento(f"📤 Git push realizado | Concurso {concurso_atual}")
+
+        else:
+            print("\n" + "=" * 50)
+            print("📭 NENHUMA ALTERAÇÃO PARA COMMIT")
+            print("=" * 50 + "\n")
+
+            log_treinamento("📭 Nenhuma alteração para commit")
+
+    except Exception as e:
+        print("\n" + "=" * 50)
+        print("❌ ERRO NO CHECKPOINT GIT")
+        print(str(e))
+        print("=" * 50 + "\n")
+
+        log_treinamento(f"❌ Erro no checkpoint Git: {e}")
+
+# ==========================================================
+# 🧠 TREINAMENTO SEQUENCIAL
+# ==========================================================
+
+def treinar_sequencial():
+    print("🧠 Treinamento sequencial iniciado\n")
+
+    resultados = carregar_resultados()
+    resultados = sorted(resultados, key=lambda x: x["concurso"])
+
+    avaliador = Avaliador()
+    contador_dezenas = Counter()
+    jogos_foco_1415 = []
+
+    for i in range(len(resultados) - 1):
+        concurso_atual = resultados[i]["concurso"]
+        dezenas_reais = resultados[i + 1]["dezenas"]
+
+        if APRENDIZADO_MULTIPLO:
+            for tamanho, quantidade in CONFIG_JOGOS_TREINO.items():
+                for _ in range(quantidade):
+                    jogo = gerar_jogo()
+                    pontos = contar_acertos(jogo, dezenas_reais)
+
+                    avaliador.registrar(pontos)
+                    contador_dezenas[len(jogo)] += 1
+
+                    if pontos >= 11:
+                        salvar_jogo_premiado(concurso_atual, jogo, pontos)
+
+                    if MODO_FOCO_1415 and pontos >= 14:
+                        jogos_foco_1415.append({
+                            "concurso": concurso_atual,
+                            "jogo": jogo,
+                            "pontos": pontos
+                        })
+
+                    log_treinamento(
+                        f"Concurso {concurso_atual} | Pontos: {pontos} | Tamanho: {len(jogo)}"
+                    )
+
+        print(
+            f"📘 Concurso {concurso_atual} → previsão {concurso_atual + 1} | "
+            f"Últimos pontos: {pontos}"
+        )
+
+        # 🚀 CHECKPOINT GIT
+        git_checkpoint(concurso_atual)
+
+    print("\n✅ Treinamento finalizado com sucesso")
+
+# ==========================================================
+# ▶️ EXECUÇÃO
+# ==========================================================
+
+if __name__ == "__main__":
+    treinar_sequencial()
+
+>>> FILE: .\src\engine\__init__.py
+
+

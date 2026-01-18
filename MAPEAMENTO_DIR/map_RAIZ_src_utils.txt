@@ -1,0 +1,171 @@
+>>> FILE: .\src\utils\comparador.py
+def contar_acertos(jogo, resultado_real):
+    return len(set(jogo) & set(resultado_real))
+
+>>> FILE: .\src\utils\dados.py
+import sqlite3
+import os
+
+DB_PATH = "data/lotofacil.db"
+
+def carregar_resultados():
+    """
+    Carrega concursos do banco SQLite de forma inteligente.
+    Detecta automaticamente como as dezenas estão armazenadas.
+    Retorna:
+    [
+        {
+            "concurso": int,
+            "dezenas": [int, int, ..., int]
+        }
+    ]
+    """
+
+    if not os.path.exists(DB_PATH):
+        raise FileNotFoundError(f"Banco não encontrado: {DB_PATH}")
+
+    con = sqlite3.connect(DB_PATH)
+    cur = con.cursor()
+
+    # 1️⃣ Descobrir estrutura da tabela concursos
+    cur.execute("PRAGMA table_info(concursos)")
+    colunas = [c[1] for c in cur.fetchall()]
+
+    if "concurso" not in colunas:
+        raise RuntimeError("Tabela concursos não possui coluna 'concurso'")
+
+    # 2️⃣ Caso 1: dezenas em colunas separadas (n1, n2, ...)
+    colunas_numericas = [
+        c for c in colunas
+        if c.lower().startswith(("n", "d", "bola"))
+    ]
+
+    resultados = []
+
+    if len(colunas_numericas) >= 15:
+        colunas_numericas = sorted(colunas_numericas)
+
+        query = f"""
+            SELECT concurso, {",".join(colunas_numericas)}
+            FROM concursos
+            ORDER BY concurso DESC
+        """
+        cur.execute(query)
+
+        for row in cur.fetchall():
+            concurso = row[0]
+            dezenas = list(map(int, row[1:]))
+
+            resultados.append({
+                "concurso": concurso,
+                "dezenas": dezenas
+            })
+
+    # 3️⃣ Caso 2: dezenas em uma única coluna texto
+    else:
+        coluna_texto = None
+        for c in colunas:
+            if c.lower() in ("dezenas", "numeros", "resultado"):
+                coluna_texto = c
+                break
+
+        if not coluna_texto:
+            raise RuntimeError(
+                "Não foi possível identificar colunas de dezenas na tabela concursos"
+            )
+
+        cur.execute(f"""
+            SELECT concurso, {coluna_texto}
+            FROM concursos
+            ORDER BY concurso DESC
+        """)
+
+        for concurso, texto in cur.fetchall():
+            dezenas = list(map(int, texto.replace(";", ",").split(",")))
+
+            resultados.append({
+                "concurso": concurso,
+                "dezenas": dezenas
+            })
+
+    con.close()
+
+    if not resultados:
+        raise RuntimeError("Nenhum concurso carregado do banco")
+
+    return resultados
+
+>>> FILE: .\src\utils\extrator_features.py
+# src/utils/extrator_features.py
+
+import numpy as np
+from src.engine.aprendiz import obter_perfil_vencedor
+
+def extrair_features(jogo, jogo_anterior=None):
+    perfil = set(obter_perfil_vencedor())
+
+    soma = sum(jogo)
+    pares = sum(1 for d in jogo if d % 2 == 0)
+    impares = 15 - pares
+
+    repeticao = len(set(jogo) & set(jogo_anterior)) if jogo_anterior else 0
+    perc_perfil = len(set(jogo) & perfil) / len(jogo) if perfil else 0
+
+    dispersao = float(np.std(jogo))
+    entropia = len(set(jogo)) / 25
+
+    return {
+        "soma": soma,
+        "pares": pares,
+        "impares": impares,
+        "repeticao_anterior": repeticao,
+        "perc_perfil": round(perc_perfil, 3),
+        "freq_media": 0.0,   # pode evoluir depois
+        "dispersao": round(dispersao, 3),
+        "entropia": round(entropia, 3)
+    }
+
+>>> FILE: .\src\utils\logger.py
+"""
+🧾 LOGGER CENTRAL DO SISTEMA
+Responsável por logs padronizados em todo o projeto.
+"""
+
+import logging
+import sys
+
+# ==================================================
+# ⚙️ CONFIGURAÇÃO BASE
+# ==================================================
+LOGGER_NAME = "IA_Lotofacil"
+LOG_LEVEL = logging.INFO  # mude para DEBUG se quiser mais detalhes
+
+# ==================================================
+# 🧠 CRIA LOGGER
+# ==================================================
+logger = logging.getLogger(LOGGER_NAME)
+logger.setLevel(LOG_LEVEL)
+
+# Evita duplicar handlers (erro comum)
+if not logger.handlers:
+    handler = logging.StreamHandler(sys.stdout)
+
+    formatter = logging.Formatter(
+        fmt="%(asctime)s | %(levelname)-7s | %(message)s",
+        datefmt="%H:%M:%S"
+    )
+
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+# ==================================================
+# 🚫 NÃO PROPAGA PARA ROOT LOGGER
+# ==================================================
+logger.propagate = False
+
+>>> FILE: .\src\utils\tempo.py
+
+
+>>> FILE: .\src\utils\__init__.py
+
+

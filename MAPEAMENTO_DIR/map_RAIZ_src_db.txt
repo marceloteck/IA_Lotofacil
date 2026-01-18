@@ -1,0 +1,235 @@
+>>> FILE: .\src\db\banco.py
+import sqlite3
+
+DB_PATH = "data/lotofacil.db"
+
+def carregar_concursos():
+    con = sqlite3.connect(DB_PATH)
+    cur = con.cursor()
+
+    cur.execute("SELECT * FROM concursos ORDER BY concurso")
+
+    concursos = []
+    for row in cur.fetchall():
+        concurso = row[0]
+        dezenas = list(map(int, row[1:16]))
+        concursos.append((concurso, dezenas))
+
+    con.close()
+    return concursos
+
+>>> FILE: .\src\db\memoria_sqlite.py
+import sqlite3
+import os
+import json
+from collections import Counter
+
+# ==========================================================
+# 📁 CONFIGURAÇÃO DE DIRETÓRIO E BANCO
+# ==========================================================
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, "..", ".."))
+
+DATA_DIR = os.path.join(PROJECT_ROOT, "data")
+DB_PATH = os.path.join(DATA_DIR, "lotofacil.db")
+
+def conectar():
+    os.makedirs(DATA_DIR, exist_ok=True)
+    return sqlite3.connect(DB_PATH)
+
+# ==========================================================
+# 🗄️ GARANTIA DE TABELAS
+# ==========================================================
+
+def garantir_tabelas():
+    con = conectar()
+    cur = con.cursor()
+
+    # Memória de jogos premiados da IA
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS memoria_premiada (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            concurso INTEGER,
+            dezenas TEXT NOT NULL,
+            pontos INTEGER NOT NULL
+        )
+    """)
+
+    # Histórico de resultados reais (opcional / futuro)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS resultados (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            concurso INTEGER,
+            dezenas TEXT NOT NULL
+        )
+    """)
+
+    con.commit()
+    con.close()
+
+# ==========================================================
+# 💾 SALVAR JOGO PREMIADO
+# ==========================================================
+
+def salvar_jogo_premiado(concurso, dezenas, pontos):
+    if pontos < 11:
+        return False
+
+    garantir_tabelas()
+
+    con = conectar()
+    cur = con.cursor()
+
+    dezenas_txt = ",".join(map(str, dezenas))
+
+    cur.execute("""
+        INSERT INTO memoria_premiada (concurso, dezenas, pontos)
+        VALUES (?, ?, ?)
+    """, (concurso, dezenas_txt, pontos))
+
+    con.commit()
+    con.close()
+
+    return True
+
+# ==========================================================
+# 📥 LEITURAS DA MEMÓRIA PREMIADA
+# ==========================================================
+
+def carregar_memoria_premiada():
+    garantir_tabelas()
+
+    con = conectar()
+    cur = con.cursor()
+
+    cur.execute("""
+        SELECT dezenas, pontos
+        FROM memoria_premiada
+        WHERE pontos >= 11
+    """)
+
+    jogos = []
+    for dezenas, pontos in cur.fetchall():
+        jogos.append({
+            "dezenas": list(map(int, dezenas.split(","))),
+            "pontos": pontos
+        })
+
+    con.close()
+    return jogos
+
+def carregar_frequencia_dezenas():
+    garantir_tabelas()
+
+    con = conectar()
+    cur = con.cursor()
+
+    cur.execute("""
+        SELECT dezenas
+        FROM memoria_premiada
+        WHERE pontos >= 11
+    """)
+
+    contador = Counter()
+
+    for (dezenas,) in cur.fetchall():
+        nums = map(int, dezenas.split(","))
+        contador.update(nums)
+
+    con.close()
+    return dict(contador)
+
+def carregar_jogos_memoria():
+    """
+    Retorna lista de tuplas:
+    ([dezenas], pontos)
+    """
+    garantir_tabelas()
+
+    conn = conectar()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT dezenas, pontos
+        FROM memoria_premiada
+    """)
+
+    dados = []
+    for dezenas_str, pontos in cur.fetchall():
+        dezenas = [int(d) for d in dezenas_str.split(",")]
+        dados.append((dezenas, pontos))
+
+    conn.close()
+    return dados
+
+def carregar_jogos_premiados(min_pontos=14):
+    """
+    Usado pelo calibrador elite
+    """
+    garantir_tabelas()
+
+    conn = conectar()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT dezenas, pontos
+        FROM memoria_premiada
+        WHERE pontos >= ?
+    """, (min_pontos,))
+
+    registros = cursor.fetchall()
+    conn.close()
+
+    jogos = []
+    for dezenas_str, pontos in registros:
+        dezenas = [int(x) for x in dezenas_str.split(",")]
+        jogos.append({
+            "dezenas": dezenas,
+            "pontos": pontos
+        })
+
+    return jogos
+
+# ==========================================================
+# 📊 HISTÓRICO PARA ESTATÍSTICAS
+# ==========================================================
+
+def carregar_historico():
+    """
+    Retorna lista de listas com dezenas
+    Usado para dezenas quentes e frias
+    Prioridade:
+    1️⃣ resultados reais (se existirem)
+    2️⃣ memória premiada da IA
+    """
+
+    garantir_tabelas()
+
+    conn = conectar()
+    cursor = conn.cursor()
+
+    # Tenta usar resultados reais primeiro
+    cursor.execute("SELECT dezenas FROM resultados")
+    rows = cursor.fetchall()
+
+    historico = []
+
+    if rows:
+        for (dezenas_str,) in rows:
+            dezenas = [int(x) for x in dezenas_str.split(",")]
+            historico.append(dezenas)
+    else:
+        # Fallback: usa memória premiada
+        cursor.execute("SELECT dezenas FROM memoria_premiada")
+        rows = cursor.fetchall()
+        for (dezenas_str,) in rows:
+            dezenas = [int(x) for x in dezenas_str.split(",")]
+            historico.append(dezenas)
+
+    conn.close()
+    return historico
+
+>>> FILE: .\src\db\__init__.py
+
+

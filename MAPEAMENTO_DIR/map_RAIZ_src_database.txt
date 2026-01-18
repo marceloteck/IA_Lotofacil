@@ -1,0 +1,308 @@
+>>> FILE: .\src\database\connection.py
+import sqlite3
+import os
+
+DB_PATH = "data/lotofacil.db"
+
+def get_conn():
+    if not os.path.exists("data"):
+        os.makedirs("data")
+
+    conn = sqlite3.connect(DB_PATH)
+    return conn
+
+>>> FILE: .\src\database\db_init.py
+import sqlite3
+from pathlib import Path
+
+DB_PATH = Path("data/lotofacil.db")
+SCHEMA_PATH = Path("src/database/db_schema.sql")
+
+def criar_banco():
+    DB_PATH.parent.mkdir(exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
+        cursor.executescript(f.read())
+
+    conn.commit()
+    conn.close()
+
+    print("✅ Banco SQLite estruturado com schema profissional.")
+
+if __name__ == "__main__":
+    criar_banco()
+
+>>> FILE: .\src\database\db_manager.py
+import sqlite3
+from pathlib import Path
+from datetime import datetime
+
+DB_PATH = Path("data/lotofacil.db")
+
+def conectar():
+    return sqlite3.connect(DB_PATH)
+
+def salvar_concurso(concurso, dezenas, data=None):
+    conn = conectar()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    INSERT OR IGNORE INTO concursos (concurso, dezenas, data)
+    VALUES (?, ?, ?)
+    """, (concurso, ",".join(map(str, dezenas)), data))
+
+    conn.commit()
+    conn.close()
+
+def salvar_tentativa(concurso, tentativa, dezenas, acertos, score, tempo_exec):
+    conn = conectar()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    INSERT INTO tentativas
+    (concurso, tentativa, dezenas, acertos, score, tempo_exec, timestamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        concurso,
+        tentativa,
+        ",".join(map(str, dezenas)),
+        acertos,
+        score,
+        tempo_exec,
+        datetime.now().isoformat()
+    ))
+
+    conn.commit()
+    conn.close()
+
+def salvar_checkpoint(concurso_atual, tentativa_atual):
+    conn = conectar()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    INSERT OR REPLACE INTO checkpoint
+    (id, concurso_atual, tentativa_atual, inicio_timestamp)
+    VALUES (1, ?, ?, ?)
+    """, (
+        concurso_atual,
+        tentativa_atual,
+        datetime.now().isoformat()
+    ))
+
+    conn.commit()
+    conn.close()
+
+def carregar_checkpoint():
+    conn = conectar()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT concurso_atual, tentativa_atual FROM checkpoint WHERE id=1")
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        return row[0], row[1]
+    return None, None
+
+>>> FILE: .\src\database\import_csv.py
+import pandas as pd
+from src.database.connection import get_conn
+
+def importar_csv(caminho_csv):
+    df = pd.read_csv(caminho_csv, sep=';')
+
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    # Limpa dados antigos
+    cursor.execute("DELETE FROM concursos")
+    cursor.execute("DELETE FROM frequencias")
+
+    # Insere concursos
+    for _, row in df.iterrows():
+        dezenas = row.iloc[1:16].tolist()
+        cursor.execute("""
+        INSERT INTO concursos (
+            concurso,d1,d2,d3,d4,d5,d6,d7,d8,d9,d10,d11,d12,d13,d14,d15
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, [row.iloc[0]] + dezenas)
+
+    # Calcula frequências
+    contagem = {i: 0 for i in range(1, 26)}
+    for _, row in df.iterrows():
+        for dez in row.iloc[1:16]:
+            contagem[int(dez)] += 1
+
+    total = sum(contagem.values())
+
+    for numero, qtd in contagem.items():
+        peso = qtd / total
+        cursor.execute("""
+        INSERT INTO frequencias (numero, quantidade, peso)
+        VALUES (?,?,?)
+        """, (numero, qtd, peso))
+
+    conn.commit()
+    conn.close()
+    print("✅ CSV importado e frequências calculadas")
+
+if __name__ == "__main__":
+    importar_csv("data\planilhas\Lotofácil.csv")
+
+>>> FILE: .\src\database\init_db.py
+from src.database.connection import get_conn
+
+def init_db():
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    # Tabela de concursos
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS concursos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        concurso INTEGER,
+        d1 INTEGER, d2 INTEGER, d3 INTEGER, d4 INTEGER, d5 INTEGER,
+        d6 INTEGER, d7 INTEGER, d8 INTEGER, d9 INTEGER, d10 INTEGER,
+        d11 INTEGER, d12 INTEGER, d13 INTEGER, d14 INTEGER, d15 INTEGER
+    )
+    """)
+
+    # Tabela de frequências
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS frequencias (
+        numero INTEGER PRIMARY KEY,
+        quantidade INTEGER,
+        peso REAL
+    )
+    """)
+
+    # Estado do motor
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS estado_motor (
+        id INTEGER PRIMARY KEY,
+        tentativas INTEGER,
+        melhor_pontos INTEGER
+    )
+    """)
+
+    # Inicializa estado se não existir
+    cursor.execute("SELECT COUNT(*) FROM estado_motor")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("""
+        INSERT INTO estado_motor (id, tentativas, melhor_pontos)
+        VALUES (1, 0, 0)
+        """)
+
+    conn.commit()
+    conn.close()
+    print("✅ Banco inicializado com sucesso")
+
+if __name__ == "__main__":
+    init_db()
+
+>>> FILE: .\src\database\learning.py
+import sqlite3
+from src.database.connection import get_conn
+
+def init_learning():
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS aprendizado (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        concurso INTEGER,
+        pontos INTEGER,
+        base TEXT
+    )
+    """)
+
+    conn.commit()
+    conn.close()
+
+def salvar_aprendizado(concurso, pontos, base):
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    INSERT INTO aprendizado (concurso, pontos, base)
+    VALUES (?, ?, ?)
+    """, (concurso, pontos, str(sorted(base))))
+
+    conn.commit()
+    conn.close()
+
+>>> FILE: .\src\database\state.py
+import json
+import os
+
+CAMINHO_ESTADO = "data/estado_motor.json"
+
+ESTADO_PADRAO = {
+    "tentativas": 0,
+    "melhor_pontos": 0,
+    "limite_tentativas": 600
+}
+
+def carregar_estado():
+    if not os.path.exists("data"):
+        os.makedirs("data")
+
+    if not os.path.exists(CAMINHO_ESTADO):
+        salvar_estado(
+            ESTADO_PADRAO["tentativas"],
+            ESTADO_PADRAO["melhor_pontos"],
+            ESTADO_PADRAO["limite_tentativas"]
+        )
+        return ESTADO_PADRAO.copy()
+
+    with open(CAMINHO_ESTADO, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def salvar_estado(tentativas, melhor_pontos, limite_tentativas=None):
+    estado = {
+        "tentativas": tentativas,
+        "melhor_pontos": melhor_pontos,
+        "limite_tentativas": limite_tentativas or ESTADO_PADRAO["limite_tentativas"]
+    }
+
+    with open(CAMINHO_ESTADO, "w", encoding="utf-8") as f:
+        json.dump(estado, f, indent=4)
+
+>>> FILE: .\src\database\training_log.py
+from src.database.connection import get_conn
+
+def init_training_log():
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS training_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            concurso INTEGER,
+            pontos INTEGER,
+            score REAL,
+            base TEXT
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+def salvar_log(concurso, pontos, score, base):
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO training_log (concurso, pontos, score, base)
+        VALUES (?, ?, ?, ?)
+    """, (concurso, pontos, score, str(base)))
+
+    conn.commit()
+    conn.close()
+
+>>> FILE: .\src\database\__init__.py
+
+

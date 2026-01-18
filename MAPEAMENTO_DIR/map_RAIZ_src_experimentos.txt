@@ -1,0 +1,199 @@
+>>> FILE: .\src\experimentos\laboratorio_inteligente.py
+import os
+import csv
+import datetime
+import statistics
+from collections import Counter
+
+from src.engine.motor_multicerebro import gerar_jogo
+from src.engine.avaliador import Avaliador
+from src.db.memoria_sqlite import carregar_jogos_memoria
+
+# ===============================
+# 🔢 CONTADOR DE ACERTOS (LOCAL)
+# ===============================
+def contar_acertos(jogo, concurso):
+    return len(set(jogo) & set(concurso))
+
+# ===============================
+# 🧠 NN CONSULTIVA (OPCIONAL)
+# ===============================
+try:
+    from src.engine.cerebro_neural import avaliar_ciclo
+    NN_ATIVA = True
+except ImportError:
+    NN_ATIVA = False
+
+# ===============================
+# 📁 PASTA DE RELATÓRIOS
+# ===============================
+BASE_DIR = os.path.dirname(__file__)
+RELATORIOS_DIR = os.path.join(BASE_DIR, "relatorios")
+os.makedirs(RELATORIOS_DIR, exist_ok=True)
+
+DATA_TAG = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
+
+# ===============================
+# 🎛️ ESTRATÉGIAS
+# ===============================
+ESTRATEGIAS = [
+    {"nome": "padrao", "usar_nn": False},
+    {"nome": "nucleo_forte", "usar_nn": False},
+    {"nome": "nn_consultiva", "usar_nn": True},
+]
+
+CICLOS = 50
+LIMITE_OVERFITTING = 0.70
+
+# ===============================
+# 🔁 EXECUTAR CICLO
+# ===============================
+def executar_ciclo(concursos):
+    pontos = []
+    dezenas_usadas = Counter()
+    avaliador = Avaliador()
+
+    for concurso_real in concursos:
+        jogo = gerar_jogo()
+        p = contar_acertos(jogo, concurso_real)
+
+        pontos.append(p)
+        avaliador.registrar(p)
+
+        if p >= 11:
+            dezenas_usadas.update(jogo)
+
+    return pontos, dezenas_usadas, avaliador
+
+# ===============================
+# 📊 MÉTRICAS
+# ===============================
+def coletar_metricas(pontos):
+    return {
+        "media": statistics.mean(pontos),
+        "taxa_11": sum(1 for p in pontos if p >= 11) / len(pontos),
+        "desvio": statistics.pstdev(pontos),
+    }
+
+# ===============================
+# 🚨 OVERFITTING
+# ===============================
+def detectar_overfitting(metricas, dezenas_usadas):
+    if metricas["taxa_11"] > LIMITE_OVERFITTING:
+        return True
+
+    if dezenas_usadas:
+        top = dezenas_usadas.most_common(5)
+        concentracao = sum(v for _, v in top) / sum(dezenas_usadas.values())
+        if concentracao > 0.45:
+            return True
+
+    return False
+
+# ===============================
+# 🧪 LABORATÓRIO
+# ===============================
+def executar_laboratorio():
+    memoria = carregar_jogos_memoria()
+    concursos = [j for j, _ in memoria[-500:]]
+
+    ranking = []
+    relatorio_txt = []
+
+    print(f"📦 Concursos usados no laboratório: {len(concursos)}\n")
+
+    for estrategia in ESTRATEGIAS:
+        print(f"\n🔬 Testando estratégia: {estrategia['nome']}")
+        print("-" * 40)
+
+        medias = []
+        taxas = []
+
+        ciclos_validos = 0
+        ciclos_descartados = 0
+
+        for ciclo in range(1, CICLOS + 1):
+            pontos, dezenas, _ = executar_ciclo(concursos)
+            metricas = coletar_metricas(pontos)
+
+            # 🧠 Avaliação NN
+            if estrategia["usar_nn"] and NN_ATIVA:
+                score_nn = avaliar_ciclo(pontos)
+                if score_nn < 0.5:
+                    ciclos_descartados += 1
+                    print(f"  ⚠️ Ciclo {ciclo}/{CICLOS} descartado (NN fraca)")
+                    continue
+
+            # 🚨 Overfitting
+            if detectar_overfitting(metricas, dezenas):
+                ciclos_descartados += 1
+                print(f"  🚨 Ciclo {ciclo}/{CICLOS} descartado (overfitting)")
+                continue
+
+            medias.append(metricas["media"])
+            taxas.append(metricas["taxa_11"])
+            ciclos_validos += 1
+
+            print(
+                f"  ✅ Ciclo {ciclo}/{CICLOS} | "
+                f"Média: {metricas['media']:.2f} | "
+                f"11+: {metricas['taxa_11']*100:.1f}%"
+            )
+
+        if not medias:
+            print("  ❌ Nenhum ciclo válido para esta estratégia.")
+            continue
+
+        media_final = statistics.mean(medias)
+        taxa_final = statistics.mean(taxas)
+
+        ranking.append({
+            "estrategia": estrategia["nome"],
+            "media": round(media_final, 2),
+            "taxa_11": round(taxa_final, 4)
+        })
+
+        print("\n📊 Resultado da estratégia:")
+        print(f"  ✔️ Ciclos válidos   : {ciclos_validos}")
+        print(f"  ❌ Ciclos descartados: {ciclos_descartados}")
+        print(f"  ⭐ Média final      : {media_final:.2f}")
+        print(f"  🎯 Taxa 11+         : {taxa_final*100:.2f}%")
+
+        relatorio_txt.append(
+            f"Estratégia: {estrategia['nome']}\n"
+            f"  Média de pontos : {media_final:.2f}\n"
+            f"  Taxa 11+        : {taxa_final*100:.2f}%\n"
+            f"  Ciclos válidos  : {ciclos_validos}\n"
+            f"  Descartados     : {ciclos_descartados}\n"
+            + "-" * 40
+        )
+
+    salvar_relatorio_txt(relatorio_txt)
+    salvar_ranking_csv(ranking)
+
+# ===============================
+# 💾 SALVAR RELATÓRIOS
+# ===============================
+def salvar_relatorio_txt(linhas):
+    caminho = os.path.join(RELATORIOS_DIR, f"laboratorio_{DATA_TAG}.txt")
+    with open(caminho, "w", encoding="utf-8") as f:
+        f.write("\n".join(linhas))
+
+def salvar_ranking_csv(ranking):
+    ranking = sorted(ranking, key=lambda x: x["taxa_11"], reverse=True)
+    caminho = os.path.join(RELATORIOS_DIR, f"ranking_estrategias_{DATA_TAG}.csv")
+
+    with open(caminho, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["estrategia", "media", "taxa_11"])
+        writer.writeheader()
+        for r in ranking:
+            writer.writerow(r)
+
+# ===============================
+# 🚀 MAIN
+# ===============================
+if __name__ == "__main__":
+    print("\n🧪 LABORATÓRIO INTELIGENTE INICIADO\n")
+    executar_laboratorio()
+    print("✅ Relatórios e ranking gerados com sucesso\n")
+

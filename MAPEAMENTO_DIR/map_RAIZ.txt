@@ -1,0 +1,388 @@
+>>> FILE: .\app.py
+
+
+>>> FILE: .\debug_banco.py
+from src.database.connection import get_conn
+
+def normalizar(valor):
+    if isinstance(valor, int):
+        return valor
+    if isinstance(valor, bytes):
+        if len(valor) == 8:
+            return int.from_bytes(valor, byteorder="little", signed=False)
+        return int(valor.decode(errors="ignore"))
+    return valor
+
+def debug_concursos(limit=30):
+    print("\n🔎 ANALISANDO TABELA concursos\n")
+
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT id, concurso,
+               d1,d2,d3,d4,d5,
+               d6,d7,d8,d9,d10,
+               d11,d12,d13,d14,d15
+        FROM concursos
+        ORDER BY id
+        LIMIT ?
+    """, (limit,))
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    if not rows:
+        print("❌ Tabela concursos está vazia")
+        return
+
+    concursos = []
+
+    for row in rows:
+        id_db = row[0]
+        concurso_raw = row[1]
+        concurso = normalizar(concurso_raw)
+
+        dezenas = [normalizar(d) for d in row[2:]]
+
+        concursos.append(concurso)
+
+        print(f"ID {id_db:4} | Concurso: {concurso_raw!r} -> {concurso}")
+        print(f"     Dezenas: {dezenas}")
+
+        # valida dezenas
+        for d in dezenas:
+            if not isinstance(d, int) or d < 1 or d > 25:
+                print("     ❌ DEZENA INVÁLIDA DETECTADA")
+
+    print("\n📊 VERIFICAÇÃO DE SEQUÊNCIA DOS CONCURSOS\n")
+
+    for i in range(1, len(concursos)):
+        diff = concursos[i] - concursos[i - 1]
+        if diff != 1:
+            print(
+                f"⚠️ Salto anormal entre concursos: "
+                f"{concursos[i-1]} → {concursos[i]} (Δ = {diff})"
+            )
+
+    print("\n✅ Diagnóstico concluído")
+
+def debug_frequencias():
+    print("\n🔎 ANALISANDO TABELA frequencias\n")
+
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT numero, quantidade, peso FROM frequencias ORDER BY numero")
+    rows = cursor.fetchall()
+    conn.close()
+
+    if not rows:
+        print("❌ Tabela frequencias está vazia")
+        return
+
+    for numero, qtd, peso in rows:
+        numero_n = normalizar(numero)
+        print(f"Número {numero_n} | qtd={qtd} | peso={peso}")
+
+        if not isinstance(numero_n, int) or numero_n < 1 or numero_n > 25:
+            print("❌ NÚMERO INVÁLIDO NA FREQUÊNCIA")
+
+if __name__ == "__main__":
+    debug_concursos()
+    debug_frequencias()
+
+>>> FILE: .\executarNeural.py
+from src.engine.nn_cerebro import CerebroNeural
+from src.engine.motor_multicerebro import gerar_jogo
+from src.utils.extrator_features import extrair_features
+
+nn = CerebroNeural()
+
+jogo = gerar_jogo()
+features = extrair_features(jogo)
+
+score = nn.avaliar_jogo(features)
+print("Score NN:", score)
+
+>>> FILE: .\gerar_jogos_finais.py
+from src.engine.seletor_jogos import SeletorJogos
+
+seletor = SeletorJogos(usar_nn=True)
+jogos_finais = seletor.gerar_jogos_filtrados()
+
+for i, jogo in enumerate(jogos_finais, 1):
+    print(f"Jogo {i}: {jogo}")
+
+>>> FILE: .\mapear_projeto.py
+import os
+import re
+
+# ==========================
+# CONFIGURAÇÕES
+# ==========================
+PASTA_PROJETO = "."
+MAPEAMENTO_DIR = "MAPEAMENTO_DIR"
+
+EXTENSOES_PERMITIDAS = (".py", ".md", ".json", ".yml", ".yaml", ".ini")
+PASTAS_IGNORADAS = {
+    ".git", "__pycache__", "venv", ".venv", "env", 
+    "node_modules", ".idea", ".vscode", MAPEAMENTO_DIR
+}
+
+# ==========================
+# FUNÇÃO PRINCIPAL
+# ==========================
+def mapear_projeto():
+    if not os.path.exists(MAPEAMENTO_DIR):
+        os.makedirs(MAPEAMENTO_DIR)
+
+    for raiz, pastas, arquivos in os.walk(PASTA_PROJETO):
+        pastas[:] = [p for p in pastas if p not in PASTAS_IGNORADAS]
+        arquivos_validos = [arq for arq in arquivos if arq.lower().endswith(EXTENSOES_PERMITIDAS)]
+
+        if not arquivos_validos:
+            continue
+
+        nome_f = raiz.replace(os.sep, "_").replace(".", "RAIZ").strip("_")
+        caminho_saida = os.path.join(MAPEAMENTO_DIR, f"map_{nome_f}.txt")
+
+        with open(caminho_saida, "w", encoding="utf-8") as saida:
+            for arquivo in arquivos_validos:
+                caminho_arq = os.path.join(raiz, arquivo)
+                saida.write(f">>> FILE: {caminho_arq}\n")
+
+                try:
+                    with open(caminho_arq, "r", encoding="utf-8") as f:
+                        conteudo = f.read()
+
+                        # Remove excesso de quebras de linha (3 ou mais viram apenas 2)
+                        # \n{2,} encontra 2 ou mais quebras. Substituindo por \n garante 
+                        # que não haja linhas em branco excessivas.
+                        conteudo_limpo = re.sub(r'\n\s*\n+', '\n\n', conteudo).strip()
+
+                        saida.write(conteudo_limpo)
+                except Exception as e:
+                    saida.write(f"[ERRO: {e}]")
+
+                saida.write("\n\n") # Separação entre arquivos diferentes
+
+    print(f"✅ Mapeamento ultra-compacto concluído em: {MAPEAMENTO_DIR}")
+
+if __name__ == "__main__":
+    mapear_projeto()
+
+>>> FILE: .\reimportar_concursos_corrigido.py
+import csv
+import os
+from src.database.connection import get_conn
+
+#CSV_PATH = "data\planilhas\Lotofácil.csv"  # ajuste se necessário
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CSV_PATH = os.path.join(BASE_DIR, "data", "planilhas", "Lotofácil.csv")
+
+def recriar_tabela():
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("DROP TABLE IF EXISTS concursos")
+
+    cur.execute("""
+        CREATE TABLE concursos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            concurso INTEGER NOT NULL,
+            d1 INTEGER, d2 INTEGER, d3 INTEGER, d4 INTEGER, d5 INTEGER,
+            d6 INTEGER, d7 INTEGER, d8 INTEGER, d9 INTEGER, d10 INTEGER,
+            d11 INTEGER, d12 INTEGER, d13 INTEGER, d14 INTEGER, d15 INTEGER
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+    print("✅ Tabela concursos recriada corretamente")
+
+def importar_csv():
+    conn = get_conn()
+    cur = conn.cursor()
+
+    with open(CSV_PATH, newline="", encoding="utf-8") as f:
+        reader = csv.reader(f, delimiter=';')  # 👈 CORREÇÃO AQUI
+        next(reader)  # pula cabeçalho
+
+        total = 0
+        for row in reader:
+            if len(row) < 16:
+                continue  # ignora linha quebrada
+
+            concurso = int(row[0])
+            dezenas = [int(x) for x in row[1:16]]
+
+            cur.execute("""
+                INSERT INTO concursos (
+                    concurso,
+                    d1,d2,d3,d4,d5,
+                    d6,d7,d8,d9,d10,
+                    d11,d12,d13,d14,d15
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, [concurso] + dezenas)
+
+            total += 1
+
+    conn.commit()
+    conn.close()
+    print(f"✅ {total} concursos importados corretamente")
+
+if __name__ == "__main__":
+    recriar_tabela()
+    importar_csv()
+
+>>> FILE: .\test,bd.py
+import sqlite3
+
+conn = sqlite3.connect("data/lotofacil.db")
+cursor = conn.cursor()
+cursor.execute("PRAGMA table_info(concursos)")
+print(cursor.fetchall())
+
+>>> FILE: .\teste_motor.py
+from src.engine.engine import executar_motor
+
+executar_motor()
+
+>>> FILE: .\teste_treinamento.py
+from src.engine.trainer import treinar_sequencial
+
+treinar_sequencial()
+
+>>> FILE: .\teste_treinamento_github.py
+from src.engine.trainer_GITHUB import treinar_sequencial
+
+treinar_sequencial()
+
+>>> FILE: .\treinamentoIncremental-TIME.py
+import subprocess
+import time
+
+# Configurações
+tempo_limite_minutos = 120
+segundos_totais = tempo_limite_minutos * 60
+inicio_geral = time.time()
+
+print(f"Iniciando loop de execução por {tempo_limite_minutos} minutos...")
+
+while (time.time() - inicio_geral) < segundos_totais:
+    print(f"\n--- Iniciando execução: {time.strftime('%H:%M:%S')} ---")
+
+    # Executa o seu comando
+    # O script espera o comando terminar para começar a próxima repetição
+    subprocess.run(["python", "-m", "teste_treinamento"])
+
+    tempo_restante = segundos_totais - (time.time() - inicio_geral)
+
+    if tempo_restante > 0:
+        minutos_faltando = int(tempo_restante / 60)
+        print(f"Execução finalizada. Tempo restante: {minutos_faltando} min.")
+    else:
+        print("Tempo esgotado!")
+
+print(f"Período de {tempo_limite_minutos} minutos concluído.")
+
+>>> FILE: .\ver_memoria.py
+import os
+import sqlite3
+from collections import Counter
+from src.db.memoria_sqlite import carregar_memoria_premiada
+
+# --- CONFIGURAÇÃO DE CAMINHOS ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "data", "lotofacil.db")
+DATA_DIR = os.path.join(BASE_DIR, "data")
+
+caminho_diretorio_txt = os.path.join("src", "memory")
+caminho_arquivo_txt = os.path.join(caminho_diretorio_txt, "memoriaSalva.txt")
+
+os.makedirs(caminho_diretorio_txt, exist_ok=True)
+
+def conectar():
+    os.makedirs(DATA_DIR, exist_ok=True)
+    return sqlite3.connect(DB_PATH)
+
+def gerar_relatorio_texto():
+    """Busca dados no banco e prepara o resumo estatístico em string"""
+    con = conectar()
+    cur = con.cursor()
+
+    try:
+        cur.execute("""
+            SELECT pontos, COUNT(*) 
+            FROM memoria_premiada 
+            GROUP BY pontos 
+            ORDER BY pontos DESC
+        """)
+        resultados = cur.fetchall()
+        total_jogos = sum(row[1] for row in resultados)
+
+        linhas_relatorio = []
+        linhas_relatorio.append("="*40)
+        linhas_relatorio.append("📊 ESTATÍSTICAS DA MEMÓRIA")
+        linhas_relatorio.append("="*40)
+
+        if not resultados:
+            linhas_relatorio.append("A memória ainda está vazia.")
+        else:
+            for pontos, quantidade in resultados:
+                percentual = (quantidade / total_jogos) * 100
+                barra = "█" * int(percentual / 5)
+                linhas_relatorio.append(f"{pontos} Pts: {quantidade:4d} | {barra} ({percentual:6.2f}%)")
+
+        linhas_relatorio.append("-" * 40)
+        linhas_relatorio.append(f"Total de jogos memorizados: {total_jogos}")
+        linhas_relatorio.append("=" * 40 + "\n")
+
+        return "\n".join(linhas_relatorio)
+    except Exception as e:
+        return f"Erro ao gerar estatísticas: {e}"
+    finally:
+        con.close()
+
+def executar_processamento():
+    # 1. Carregar os jogos para a lista detalhada
+    jogos = carregar_memoria_premiada()
+
+    # 2. Gerar o resumo estatístico
+    resumo = gerar_relatorio_texto()
+
+    print(resumo) # Mostra o resumo no console
+
+    if not jogos:
+        with open(caminho_arquivo_txt, "w", encoding="utf-8") as f:
+            f.write(resumo)
+            f.write("\nNenhum jogo detalhado encontrado.")
+        print("Nenhum jogo encontrado para listar.")
+        return
+
+    # 3. Ordenar jogos (Maior pontuação primeiro)
+    jogos_ordenados = sorted(jogos, key=lambda x: x['pontos'], reverse=True)
+
+    # 4. Gravar tudo no arquivo
+    with open(caminho_arquivo_txt, "w", encoding="utf-8") as f:
+        # Escreve o primeiro relatório (Estatísticas)
+        f.write(resumo)
+
+        # Escreve o segundo relatório (Lista de Jogos)
+        f.write("\n🏆 LISTA DETALHADA DE JOGOS\n")
+        f.write("-" * 40 + "\n")
+
+        for j in jogos_ordenados:
+            linha = f"{j['pontos']} pontos | {j['dezenas']}"
+            f.write(linha + "\n")
+
+    print(f"✅ Relatório completo (Estatísticas + Lista) salvo em:\n👉 {caminho_arquivo_txt}")
+
+if __name__ == "__main__":
+    executar_processamento()
+
+>>> FILE: .\__init__.py
+
+

@@ -1,0 +1,75 @@
+>>> FILE: .\src\generator\constraints.py
+# src/generator/constraints.py
+
+CONSTRAINTS = {
+    "impares": (8, 9),
+    "primos": (5, 6),
+    "multiplos_3": (4, 6),
+    "fibonacci": (3, 5),
+    "moldura": (9, 10),
+}
+
+>>> FILE: .\src\generator\diversity.py
+# src/generator/diversity.py
+
+def diversidade(jogo, jogos_anteriores, limite=12):
+    """
+    Garante que um novo jogo não seja muito parecido com os anteriores
+    """
+    for anterior in jogos_anteriores:
+        intersecao = len(set(jogo) & set(anterior))
+        if intersecao >= limite:
+            return False
+    return True
+
+>>> FILE: .\src\generator\generator.py
+# src/generator/generator.py
+
+import random
+from src.analysis.patterns import (
+    contar_impares,
+    contar_primos,
+    contar_multiplos_3,
+    contar_fibonacci,
+    contar_moldura,
+)
+from src.generator.constraints import CONSTRAINTS
+from src.generator.diversity import diversidade
+
+UNIVERSO = list(range(1, 26))
+
+def jogo_valido(jogo):
+    return (
+        CONSTRAINTS["impares"][0] <= contar_impares(jogo) <= CONSTRAINTS["impares"][1]
+        and CONSTRAINTS["primos"][0] <= contar_primos(jogo) <= CONSTRAINTS["primos"][1]
+        and CONSTRAINTS["multiplos_3"][0]
+        <= contar_multiplos_3(jogo)
+        <= CONSTRAINTS["multiplos_3"][1]
+        and CONSTRAINTS["fibonacci"][0]
+        <= contar_fibonacci(jogo)
+        <= CONSTRAINTS["fibonacci"][1]
+        and CONSTRAINTS["moldura"][0]
+        <= contar_moldura(jogo)
+        <= CONSTRAINTS["moldura"][1]
+    )
+
+def gerar_jogo_18(jogos_anteriores=None, tentativas=500):
+    if jogos_anteriores is None:
+        jogos_anteriores = []
+
+    for _ in range(tentativas):
+        jogo = sorted(random.sample(UNIVERSO, 18))
+
+        if not jogo_valido(jogo):
+            continue
+
+        if not diversidade(jogo, jogos_anteriores):
+            continue
+
+        return jogo
+
+    return None
+
+>>> FILE: .\src\generator\__init__.py
+
+

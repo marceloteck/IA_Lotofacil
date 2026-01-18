@@ -1,0 +1,15 @@
+>>> FILE: .\src\core\aprendizado.py
+
+
+>>> FILE: .\src\core\checkpoint.py
+
+
+>>> FILE: .\src\core\gerador.py
+
+
+>>> FILE: .\src\core\regras.py
+
+
+>>> FILE: .\src\core\__init__.py
+
+

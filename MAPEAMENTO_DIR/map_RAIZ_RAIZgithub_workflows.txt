@@ -1,0 +1,248 @@
+>>> FILE: .\.github\workflows\gerar_jogos_proximo_concurso.yml
+name: 🧠 Gerar jogos para Lotofácil
+
+on:
+  # ▶️ EXECUÇÃO MANUAL (BOTÃO)
+  workflow_dispatch:
+
+jobs:
+  treinamento:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: 📥 Checkout do repositório
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🐍 Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      # 🔎 Garantir CSV
+      - name: 🔎 Verificar CSV de concursos
+        run: |
+          if [ ! -f data/planilhas/Lotofácil.csv ]; then
+            echo "❌ CSV não encontrado: data/planilhas/Lotofácil.csv"
+            exit 1
+          fi
+          echo "✅ CSV encontrado"
+
+      # 🧠 Executar treinamento
+      - name: 🧠 Executar gerador
+        run: |
+          python -m src.scripts.gerar_jogos_proximo_concurso
+
+      # 📤 Commit apenas dos relatórios
+      - name: 📤 Commit e Push do relatório
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add src/reports/relatorios/*.txt || true
+          git add src/memory/perfil_vencedor.json || true
+
+          if ! git diff --cached --quiet; then
+            git commit -m "📊 Relatório automático: $(date +'%Y-%m-%d %H:%M:%S')"
+            git push
+          else
+            echo "Nenhuma mudança detectada."
+          fi
+
+>>> FILE: .\.github\workflows\monitorar_memoria.yml
+name: 🖥️ Monitoramento de Memória
+
+on:
+  # Permite rodar manualmente pela aba "Actions"
+  workflow_dispatch:
+  # Opcional: roda toda vez que você enviar código
+  # push:
+  #   branches:
+   #    - main
+   #    - master
+
+jobs:
+  verificar_hardware:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: 🐍 Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Instalar dependências de monitoramento
+        run: |
+          python -m pip install --upgrade pip
+          # Caso seu script use a biblioteca psutil, instale-a aqui:
+          pip install psutil || echo "psutil não necessário ou falhou"
+
+      - name: 📊 Executar verificação de memória
+        run: |
+          python ver_memoria.py
+
+      # 📤 Commit apenas dos relatórios e memória
+      - name: 📤 Commit e Push do relatório
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add src/reports/relatorios/*.txt || true
+          git add src/memory/perfil_vencedor.json || true
+
+          if ! git diff --cached --quiet; then
+            git commit -m "📊 Relatório MEMORIA automático: $(date +'%Y-%m-%d %H:%M:%S')"
+            git push
+          else
+            echo "Nenhuma mudança detectada."
+          fi
+
+>>> FILE: .\.github\workflows\TIME _TREINAMENTO.yml
+name: 🧠 Treinamento IA Lotofácil TIME
+
+on:
+  # ▶️ EXECUÇÃO MANUAL (BOTÃO)
+  workflow_dispatch:
+
+  # ⏱️ EXECUÇÃO AUTOMÁTICA POR INTERVALO
+  schedule:
+    # Executa a cada 3 horas
+    - cron: "0 */3 * * *"
+
+jobs:
+  treinamento:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: 📥 Checkout do repositório
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🐍 Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      # 🔎 Garantir CSV
+      - name: 🔎 Verificar CSV de concursos
+        run: |
+          if [ ! -f data/planilhas/Lotofácil.csv ]; then
+            echo "❌ CSV não encontrado: data/planilhas/Lotofácil.csv"
+            exit 1
+          fi
+          echo "✅ CSV encontrado"
+
+      # 🧠 Executar laboratório / treinamento
+      - name: 🧠 Executar treinamento
+        run: |
+          python -m treinamentoIncremental-TIME
+
+      # 📤 Commit apenas dos relatórios e memória
+      - name: 📤 Commit e Push do relatório
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add src/reports/relatorios/*.txt || true
+          git add src/memory/perfil_vencedor.json || true
+
+          if ! git diff --cached --quiet; then
+            git commit -m "📊 Relatório automático: $(date +'%Y-%m-%d %H:%M:%S')"
+            git push
+          else
+            echo "Nenhuma mudança detectada."
+          fi
+
+>>> FILE: .\.github\workflows\Treinamento da IA.yml
+name: 🧠 Treinamento IA Lotofácil
+
+on:
+  # ▶️ EXECUÇÃO MANUAL (BOTÃO)
+  workflow_dispatch:
+
+  # ⏱️ EXECUÇÃO AUTOMÁTICA POR INTERVALO
+  schedule:
+    # Executa a cada 3 horas
+    - cron: "0 */3 * * *"
+
+  # 🔁 Opcional: ainda roda quando fizer push
+  # push:
+  #   branches:
+  #    - main
+  #     - master
+
+jobs:
+  treinamento:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: 📥 Checkout do repositório
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🐍 Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      # 🔎 Garantir CSV
+      - name: 🔎 Verificar CSV de concursos
+        run: |
+          if [ ! -f data/planilhas/Lotofácil.csv ]; then
+            echo "❌ CSV não encontrado: data/planilhas/Lotofácil.csv"
+            exit 1
+          fi
+          echo "✅ CSV encontrado"
+
+      # 🧠 Executar laboratório / treinamento
+      #   python -m src.engine.calibrador_elite
+      - name: 🧠 Executar treinamento
+        run: |
+          python -m teste_treinamento_github
+
+      # 📤 Commit apenas dos relatórios e memória
+      - name: 📤 Commit e Push do relatório
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add src/reports/relatorios/*.txt || true
+          git add src/memory/perfil_vencedor.json || true
+
+          if ! git diff --cached --quiet; then
+            git commit -m "📊 Relatório automático: $(date +'%Y-%m-%d %H:%M:%S')"
+            git push
+          else
+            echo "Nenhuma mudança detectada."
+          fi
+
