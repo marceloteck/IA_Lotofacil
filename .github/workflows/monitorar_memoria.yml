@@ -4,10 +4,10 @@ on:
   # Permite rodar manualmente pela aba "Actions"
   workflow_dispatch:
   # Opcional: roda toda vez que você enviar código
-  push:
-    branches:
-      - main
-      - master
+  # push:
+  #   branches:
+   #    - main
+   #    - master
 
 jobs:
   verificar_hardware:
