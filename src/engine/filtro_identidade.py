@@ -1,39 +1,36 @@
-# src/engine/filtro_identidade.py
+"""
+🧠 FILTRO DE IDENTIDADE HISTÓRICA
+Bloqueia repetição exata e penaliza similaridade extrema.
+"""
 
-class FiltroIdentidade:
+def validar_jogo_historico(jogo, historico_resultados):
     """
-    🧠 Filtro histórico anti-repetição
-    Bloqueia identidade total e repulsa similaridade extrema
+    Retorna:
+    - valido (bool)
+    - penalidade (int)
     """
 
-    def __init__(self, historico, limite_intersecao=14):
-        self.historico = [set(j) for j in historico]
-        self.limite = limite_intersecao
+    jogo_set = set(jogo)
+    max_repeticao = 0
 
-    def avaliar(self, jogo):
-        """
-        Retorna:
-        - valido (bool)
-        - penalidade (float)
-        """
-        jogo_set = set(jogo)
-        maior_intersecao = 0
+    for dezenas in historico_resultados:
+        dezenas_set = set(dezenas)
 
-        for concurso in self.historico:
-            inter = len(jogo_set & concurso)
+        if jogo_set == dezenas_set:
+            return False, -9999  # bloqueio total
 
-            if inter == len(jogo_set):
-                return False, -9999  # identidade total
+        repetidas = len(jogo_set & dezenas_set)
+        if repetidas > max_repeticao:
+            max_repeticao = repetidas
 
-            maior_intersecao = max(maior_intersecao, inter)
-
-        # Penalização suave
-        penalidade = 0
-        if maior_intersecao == 14:
-            penalidade = -18
-        elif maior_intersecao == 13:
-            penalidade = -9
-        elif maior_intersecao == 12:
-            penalidade = -4
-
-        return True, penalidade
+    # Penalização progressiva
+    if max_repeticao >= 15:
+        return False, -9999
+    elif max_repeticao == 14:
+        return True, -20
+    elif max_repeticao == 13:
+        return True, -10
+    elif max_repeticao == 12:
+        return True, -4
+    else:
+        return True, 0

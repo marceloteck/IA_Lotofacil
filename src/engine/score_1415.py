@@ -1,101 +1,71 @@
 """
-🎯 SCORE 14/15
-Calcula um score numérico de proximidade estatística
-com base em memória, estatística e anti-caos.
+🔥 SCORE 14–15 REAL
+Score matemático focado em padrões vencedores reais.
 """
 
 from collections import Counter
-
 from src.engine.filtro_identidade import validar_jogo_historico
-
-
-def score_memoria(jogo, memoria_1415):
-    """
-    Mede o quanto o jogo se parece com jogos 14/15 já memorizados.
-    """
-    if not memoria_1415:
-        return 0
-
-    jogo_set = set(jogo)
-    soma = 0
-
-    for jogo_mem in memoria_1415:
-        intersecao = len(jogo_set & set(jogo_mem))
-        soma += intersecao
-
-    return soma / len(memoria_1415)
-
-
-def score_estatistico(jogo, dezenas_quentes, dezenas_frias):
-    """
-    Score baseado em dezenas quentes e frias
-    (viés controlado, não extremo).
-    """
-    quentes = len(set(jogo) & set(dezenas_quentes))
-    frias = len(set(jogo) & set(dezenas_frias))
-
-    return (quentes * 2) - (frias * 1)
-
-
-def score_estrutura(jogo):
-    """
-    Avalia estrutura interna do jogo:
-    - Pares / ímpares
-    - Distribuição baixa/alta
-    """
-    pares = sum(1 for d in jogo if d % 2 == 0)
-    impares = len(jogo) - pares
-
-    baixos = sum(1 for d in jogo if d <= 12)
-    altos = len(jogo) - baixos
-
-    score = 0
-
-    # equilíbrio estrutural
-    if 6 <= pares <= 9:
-        score += 3
-    if 6 <= baixos <= 9:
-        score += 3
-
-    return score
 
 
 def calcular_score_1415(
     jogo,
-    memoria_1415,
+    memoria_1415,            # lista de jogos [[...], [...]]
     dezenas_quentes,
     dezenas_frias,
     historico_resultados
 ):
-    """
-    SCORE FINAL DE QUALIDADE 14/15
-    """
+    # ---------------------------
+    # PROTEÇÕES
+    # ---------------------------
+    if not isinstance(jogo, (list, tuple)) or len(jogo) != 15:
+        return -9999
 
-    # ===============================
-    # 🚫 FILTRO HISTÓRICO
-    # ===============================
-    valido, penalidade_hist = validar_jogo_historico(
-        jogo, historico_resultados
-    )
+    score = 0.0
 
+    # ----------------------------------
+    # 1️⃣ FILTRO HISTÓRICO (ANTI-CLONE)
+    # ----------------------------------
+    valido, penal_hist = validar_jogo_historico(jogo, historico_resultados)
     if not valido:
-        return -9999  # impossível
+        return -9999
 
-    # ===============================
-    # 🧠 SCORES PARCIAIS
-    # ===============================
-    s_memoria = score_memoria(jogo, memoria_1415)
-    s_est = score_estatistico(jogo, dezenas_quentes, dezenas_frias)
-    s_estr = score_estrutura(jogo)
+    score += penal_hist
 
-    # ===============================
-    # ⚖️ SCORE FINAL
-    # ===============================
-    score_final = (
-        (s_memoria * 1.5) +
-        (s_est * 1.0) +
-        (s_estr * 1.0) +
-        penalidade_hist
+    # ----------------------------------
+    # 2️⃣ FREQUÊNCIA HISTÓRICA REAL
+    # ----------------------------------
+    freq = Counter()
+    for j in memoria_1415:
+        freq.update(j)
+
+    score_freq = sum(freq.get(d, 0) for d in jogo)
+    score += score_freq * 0.004  # ⚠️ PESO REDUZIDO (antes estava matando tudo)
+
+    # ----------------------------------
+    # 3️⃣ DEZENAS QUENTES / FRIAS
+    # ----------------------------------
+    quentes = len(set(jogo) & set(dezenas_quentes))
+    frias = len(set(jogo) & set(dezenas_frias))
+
+    score += quentes * 2.0
+    score -= frias * 1.0
+
+    # ----------------------------------
+    # 4️⃣ PAR / ÍMPAR (ideal 7/8)
+    # ----------------------------------
+    pares = sum(1 for d in jogo if d % 2 == 0)
+    impares = 15 - pares
+    score += max(0, 10 - abs(pares - impares) * 1.5)
+
+    # ----------------------------------
+    # 5️⃣ SEQUÊNCIAS LONGAS (PENALIZA)
+    # ----------------------------------
+    ordenado = sorted(jogo)
+    seq = sum(
+        1 for i in range(len(ordenado) - 1)
+        if ordenado[i] + 1 == ordenado[i + 1]
     )
 
-    return round(score_final, 2)
+    score -= seq * 1.2  # ⚠️ suavizado
+
+    return round(score, 3)
