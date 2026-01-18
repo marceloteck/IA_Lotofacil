@@ -10,10 +10,10 @@ on:
     - cron: "0 */3 * * *"
 
   # 🔁 Opcional: ainda roda quando fizer push
-  push:
-    branches:
-      - main
-      - master
+  # push:
+  #   branches:
+  #    - main
+  #     - master
 
 jobs:
   treinamento:
