@@ -11,7 +11,7 @@ python -m teste_treinamento
 
 echo.
 echo =================================================
-echo   Execucao finalizada.
+echo   Execucao finalizada. - TESTE
 echo =================================================
 echo.
 
