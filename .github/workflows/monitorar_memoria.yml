@@ -31,3 +31,20 @@ jobs:
       - name: 📊 Executar verificação de memória
         run: |
           python ver_memoria.py
+
+          
+      # 📤 Commit apenas dos relatórios e memória
+      - name: 📤 Commit e Push do relatório
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add src/reports/relatorios/*.txt || true
+          git add src/memory/perfil_vencedor.json || true
+
+          if ! git diff --cached --quiet; then
+            git commit -m "📊 Relatório MEMORIA automático: $(date +'%Y-%m-%d %H:%M:%S')"
+            git push
+          else
+            echo "Nenhuma mudança detectada."
+          fi
