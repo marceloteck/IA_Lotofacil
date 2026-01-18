@@ -1,6 +1,67 @@
-# Virtual environment
+# =========================
+# Virtual Environment
+# =========================
 venv/
+.env/
+.envrc
+.venv/
 
-# Python cache
+# =========================
+# Python cache / bytecode
+# =========================
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+
+# =========================
+# Logs
+# =========================
+*.log
+logs/
+
+# =========================
+# SQLite / local databases
+# =========================
+*.db
+*.sqlite3
+
+# =========================
+# Test / coverage
+# =========================
+.coverage
+htmlcov/
+.tox/
+.pytest_cache/
+
+# =========================
+# Build / dist
+# =========================
+build/
+dist/
+*.egg-info/
+
+# =========================
+# IDEs / Editors
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Jupyter
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# Configs sensíveis
+# =========================
+*.env
+config.local.json
+secrets.json
